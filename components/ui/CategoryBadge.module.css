@@ -1,0 +1,30 @@
+.badge {
+    padding: var(--space-2) var(--space-6);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: var(--transition);
+    height: 40px;
+}
+
+.badge:hover {
+    border-color: var(--secondary);
+    color: var(--text);
+}
+
+.active {
+    background: var(--primary);
+    color: white !important;
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.3);
+}
+
+.active:hover {
+    background: #a02026;
+    border-color: #a02026;
+}
