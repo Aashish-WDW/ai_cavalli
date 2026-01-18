@@ -6,13 +6,24 @@ import { ShoppingCart, ChevronLeft } from 'lucide-react'
 import { supabase } from '@/lib/database/supabase'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { CategoryBadge } from '@/components/ui/CategoryBadge'
-import { MenuItemCard } from '@/components/ui/MenuItemCard'
+import { MenuItemCard, MenuItem } from '@/components/ui/MenuItemCard'
 import { useCart } from '@/lib/context/CartContext'
 
+interface MenuPageItem extends MenuItem {
+    category_id: string;
+    special_period?: string;
+}
+
+interface Category {
+    id: string;
+    name: string;
+    sort_order: number;
+}
+
 export default function GuestMenuPage() {
-    const [categories, setCategories] = useState<any[]>([])
-    const [items, setItems] = useState<any[]>([])
-    const [specials, setSpecials] = useState<any[]>([])
+    const [categories, setCategories] = useState<Category[]>([])
+    const [items, setItems] = useState<MenuPageItem[]>([])
+    const [specials, setSpecials] = useState<MenuPageItem[]>([])
     const [activeCategory, setActiveCategory] = useState<string>('all')
     const [searchQuery, setSearchQuery] = useState('')
     const [loading, setLoading] = useState(true)
@@ -54,7 +65,7 @@ export default function GuestMenuPage() {
         })
     }, [items, activeCategory, searchQuery])
 
-    const handleAddToCart = (item: any) => {
+    const handleAddToCart = (item: MenuItem) => {
         addToCart(item)
     }
 

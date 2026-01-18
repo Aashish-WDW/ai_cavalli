@@ -7,10 +7,34 @@ import { Input } from '@/components/ui/input'
 import { Trash2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
+interface MenuItem {
+    id: string;
+    name: string;
+    description: string | null;
+    price: number;
+    category_id: string;
+    image_url: string | null;
+    available: boolean;
+}
+
+interface Category {
+    id: string;
+    name: string;
+    sort_order: number;
+}
+
+interface SpecialItem {
+    id: string;
+    menu_item_id: string;
+    period: string;
+    date: string;
+    menu_item: MenuItem;
+}
+
 export default function KitchenSpecialsPage() {
-    const [items, setItems] = useState<any[]>([])
-    const [categories, setCategories] = useState<any[]>([])
-    const [specials, setSpecials] = useState<any[]>([])
+    const [items, setItems] = useState<MenuItem[]>([])
+    const [categories, setCategories] = useState<Category[]>([])
+    const [specials, setSpecials] = useState<SpecialItem[]>([])
 
     // Selection state
     const [selectedItem, setSelectedItem] = useState('')
@@ -43,7 +67,7 @@ export default function KitchenSpecialsPage() {
         if (menuRes.data) setItems(menuRes.data)
         if (catRes.data) {
             setCategories(catRes.data)
-            const specialsCat = catRes.data.find((c: any) => c.name === "Today's Specials")
+            const specialsCat = catRes.data.find((c: Category) => c.name === "Today's Specials")
             if (specialsCat) {
                 setNewCategoryId(specialsCat.id)
             } else if (catRes.data.length > 0) {

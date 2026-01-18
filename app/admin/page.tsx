@@ -626,7 +626,15 @@ export default function AdminDashboard() {
     )
 }
 
-function StatCard({ label, value, icon, color, trend, subtitle, sparkline }) {
+function StatCard({ label, value, icon, color, trend, subtitle, sparkline }: {
+    label: string;
+    value: string | number;
+    icon: React.ReactNode;
+    color: string;
+    trend: string;
+    subtitle: string;
+    sparkline: number[];
+}) {
     return (
         <div style={{
             background: 'white',
@@ -692,7 +700,12 @@ function StatCard({ label, value, icon, color, trend, subtitle, sparkline }) {
     )
 }
 
-function ChartCard({ title, icon, color, children }) {
+function ChartCard({ title, icon, color, children }: {
+    title: string;
+    icon: React.ReactNode;
+    color: string;
+    children: React.ReactNode;
+}) {
     return (
         <div style={{
             background: 'white',
@@ -717,7 +730,7 @@ function ChartCard({ title, icon, color, children }) {
     )
 }
 
-function ActionButton({ icon, label, href }: { icon: any, label: string, href?: string }) {
+function ActionButton({ icon, label, href }: { icon: React.ReactNode, label: string, href?: string }) {
     const Component = href ? Link : 'button'
     return (
         <Component href={href as any} style={{
@@ -744,8 +757,8 @@ function ActionButton({ icon, label, href }: { icon: any, label: string, href?: 
     )
 }
 
-function StatusBadge({ status }) {
-    const statusConfig = {
+function StatusBadge({ status }: { status: string }) {
+    const statusConfig: Record<string, { bg: string, border: string, color: string, label: string }> = {
         pending: { bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)', color: '#F59E0B', label: 'Pending' },
         preparing: { bg: 'rgba(59,130,246,0.15)', border: 'rgba(59,130,246,0.4)', color: '#3B82F6', label: 'Preparing' },
         ready: { bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.4)', color: '#10B981', label: 'Ready' },

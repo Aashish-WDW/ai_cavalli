@@ -25,6 +25,14 @@ import {
 } from 'lucide-react'
 import { Loading } from '@/components/ui/Loading'
 
+interface OrderItem {
+    id: string
+    name: string
+    quantity: number
+    notes?: string
+    price: number
+}
+
 interface Order {
     id: string
     user_id: string | null
@@ -38,7 +46,7 @@ interface Order {
     notes: string | null
     location_type: 'indoor' | 'outdoor' | null
     created_at: string
-    items?: any[]
+    items?: OrderItem[]
     user?: { role: string, name: string, phone: string } | null
 }
 

@@ -3,7 +3,7 @@ import { Button } from './button'
 import styles from './MenuItemCard.module.css'
 import { useCart } from '@/lib/context/CartContext'
 
-interface MenuItem {
+export interface MenuItem {
     id: string
     name: string
     description: string | null

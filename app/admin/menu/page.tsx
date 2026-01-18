@@ -19,9 +19,26 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 
+interface MenuItem {
+    id: string;
+    name: string;
+    description?: string;
+    price: number;
+    category_id: string;
+    image_url?: string;
+    available: boolean;
+    category?: { name: string };
+}
+
+interface Category {
+    id: string;
+    name: string;
+    sort_order: number;
+}
+
 export default function AdminMenuPage() {
-    const [items, setItems] = useState<any[]>([])
-    const [categories, setCategories] = useState<any[]>([])
+    const [items, setItems] = useState<MenuItem[]>([])
+    const [categories, setCategories] = useState<Category[]>([])
     const [searchQuery, setSearchQuery] = useState('')
     const [selectedCategory, setSelectedCategory] = useState('all')
 
@@ -82,7 +99,7 @@ export default function AdminMenuPage() {
         setAvailable(true)
     }
 
-    function handleEdit(item: any) {
+    function handleEdit(item: MenuItem) {
         setEditingId(item.id)
         setName(item.name)
         setDesc(item.description || '')
