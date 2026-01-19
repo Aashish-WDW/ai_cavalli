@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { supabase } from '@/lib/database/supabase'
+import { createClient } from '@supabase/supabase-js'
+import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/database/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loading } from '@/components/ui/Loading'
@@ -88,15 +89,20 @@ export default function UserControlPage() {
         e.preventDefault()
         setSubmitting(true)
 
-        try {
-            // 1. Sanitize Phone
-            const numeric = formData.phone.replace(/\D/g, '')
-            const sanitizedPhone = numeric.startsWith('0') ? numeric.slice(1) : numeric
-            const phone = sanitizedPhone.slice(0, 10)
+        // 1. Sanitize Phone (Declare outside try for catch access)
+        const numeric = formData.phone.replace(/\D/g, '')
+        const sanitizedPhone = numeric.startsWith('0') ? numeric.slice(1) : numeric
+        const phone = sanitizedPhone.slice(0, 10)
 
-            // 2. Create Auth User
+        try {
+            // 2. Create Auth User using a NON-PERSISTING client
+            // This prevents Supabase from logging out the Admin and logging in as the new user.
+            const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+                auth: { persistSession: false }
+            })
+
             const finalEmail = formData.email || `${phone}@example.com`
-            const { data: authData, error: authError } = await supabase.auth.signUp({
+            const { data: authData, error: authError } = await tempClient.auth.signUp({
                 email: finalEmail,
                 password: formData.pin,
                 options: { data: { full_name: formData.name } }
@@ -120,7 +126,17 @@ export default function UserControlPage() {
             resetForm()
             fetchUsers()
         } catch (err: any) {
-            alert(`Error adding user: ${err.message}`)
+            if (err.message?.includes('User already registered') || err.message?.includes('already exists')) {
+                // Check if they exist in public.users
+                const { data: existing } = await supabase.from('users').select('id').eq('phone', phone).single()
+                if (!existing) {
+                    alert(`CONFLICT: A "Ghost User" was detected. \n\nThis phone number (${phone}) is registered in the system's Auth table but was deleted from this portal. \n\nTo fix this: \n1. Go to Supabase Dashboard > Authentication. \n2. Find and delete the user with email: ${phone}@example.com \n3. Try again here.`)
+                } else {
+                    alert(`Error: This phone number is already registered to ${formData.name || 'another user'}.`)
+                }
+            } else {
+                alert(`Error adding user: ${err.message}`)
+            }
         } finally {
             setSubmitting(false)
         }
@@ -159,7 +175,7 @@ export default function UserControlPage() {
     }
 
     async function handleDelete(id: string) {
-        if (!confirm('Are you sure you want to delete this user? This will not remove their auth account but will restrict access.')) return
+        if (!confirm('CRITICAL: Delete User?\n\nThis will remove them from the database, but their System Auth account will remain (Supabase security policy).\n\nTo reuse this phone number later, you MUST also manually delete them from the Supabase Dashboard (Authentication section). \n\nProceed with Portal Deletion?')) return
 
         try {
             const { error } = await supabase.from('users').delete().eq('id', id)

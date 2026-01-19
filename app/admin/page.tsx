@@ -90,7 +90,7 @@ export default function AdminDashboard() {
 
     useEffect(() => {
         fetchData()
-    }, [])
+    }, [startDate, endDate])
 
     async function fetchData() {
         setLoading(true)
@@ -106,6 +106,8 @@ export default function AdminDashboard() {
                     )
                 )
             `)
+            .gte('created_at', `${startDate}T00:00:00`)
+            .lte('created_at', `${endDate}T23:59:59`)
             .order('created_at', { ascending: false })
 
         if (orders) {
@@ -130,14 +132,19 @@ export default function AdminDashboard() {
             setRecentOrders(orders.slice(0, 10))
 
             // 1. Process Revenue Data
-            const dailyRevenue: { [key: string]: { date: string, amount: number, orders: number } } = {}
-            orders.slice(0, 50).forEach(o => {
-                const date = new Date(o.created_at).toLocaleDateString('en-US', { weekday: 'short' })
-                if (!dailyRevenue[date]) dailyRevenue[date] = { date, amount: 0, orders: 0 }
-                dailyRevenue[date].amount += (o.total || 0)
-                dailyRevenue[date].orders++
+            const dailyRevenue: { [key: string]: { date: string, amount: number, orders: number, rawDate: string } } = {}
+            orders.forEach(o => {
+                const dateObj = new Date(o.created_at)
+                const dateKey = dateObj.toISOString().split('T')[0]
+                const dateDisplay = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+                if (!dailyRevenue[dateKey]) {
+                    dailyRevenue[dateKey] = { date: dateDisplay, amount: 0, orders: 0, rawDate: dateKey }
+                }
+                dailyRevenue[dateKey].amount += (o.total || 0)
+                dailyRevenue[dateKey].orders++
             })
-            setRevenueData(Object.values(dailyRevenue).reverse().slice(-7))
+            setRevenueData(Object.values(dailyRevenue).sort((a, b) => a.rawDate.localeCompare(b.rawDate)).slice(-30))
 
             // 2. Process Demographic Data (User role: student -> UI label: Rider)
             const demographics = { rider: 0, staff: 0, guest: 0 }
