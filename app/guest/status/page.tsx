@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Utensils } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Suspense, useEffect, useState } from 'react'
 import { supabase } from '@/lib/database/supabase'
@@ -22,7 +22,7 @@ function GuestOrderContent() {
         const { data } = await supabase
             .from('orders')
             .select(`
-                id, status, table_name, total, guest_info,
+                id, status, table_name, total, discount_amount, guest_info,
                 items:order_items(
                     id,
                     quantity,
@@ -40,7 +40,15 @@ function GuestOrderContent() {
         if (guestPhone) {
             const { data: others } = await supabase
                 .from('orders')
-                .select('id, status, total, created_at')
+                .select(`
+                    id, status, total, discount_amount, created_at,
+                    items:order_items(
+                        id,
+                        quantity,
+                        price,
+                        menu_item:menu_items(name)
+                    )
+                `)
                 .contains('guest_info', { phone: guestPhone })
                 .order('created_at', { ascending: false })
                 .limit(10)
@@ -133,7 +141,7 @@ function GuestOrderContent() {
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                         <span style={{ fontSize: '0.8rem', color: '#666' }}>Order ID:</span>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{orderId.slice(0, 8)}</span>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{orderId.slice(0, 8).toUpperCase()}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                         <span style={{ fontSize: '0.8rem', color: '#666' }}>Table/Room:</span>
@@ -147,16 +155,35 @@ function GuestOrderContent() {
                     <div style={{ borderTop: '1px solid #ddd', paddingTop: '1rem' }}>
                         <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem', color: '#444' }}>Order Summary</h4>
                         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                            {order?.items?.map((item: any) => (
-                                <li key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                                    <span>{item.quantity}x {item.menu_item?.name}</span>
-                                    <span>₹{(item.quantity * item.price).toFixed(2)}</span>
+                            {order?.notes === 'REGULAR_STAFF_MEAL' ? (
+                                <li style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 600 }}>
+                                    <Utensils size={14} />
+                                    <span>Standard Regular Staff Meal</span>
                                 </li>
-                            ))}
+                            ) : (
+                                order?.items?.map((item: any) => (
+                                    <li key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+                                        <span>{item.quantity}x {item.menu_item?.name}</span>
+                                        <span>₹{(item.quantity * item.price).toFixed(2)}</span>
+                                    </li>
+                                ))
+                            )}
                         </ul>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', fontWeight: 'bold', borderTop: '1px dashed #ccc', paddingTop: '0.5rem' }}>
-                            <span>Total</span>
-                            <span>₹{order?.total?.toFixed(2)}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px dashed #ccc', paddingTop: '0.8rem', marginTop: '0.8rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#666' }}>
+                                <span>Subtotal</span>
+                                <span>₹{order?.total?.toFixed(2)}</span>
+                            </div>
+                            {order?.discount_amount > 0 && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#DC2626', fontWeight: 600 }}>
+                                    <span>Discount</span>
+                                    <span>-₹{order?.discount_amount?.toFixed(2)}</span>
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--primary)' }}>
+                                <span>Total</span>
+                                <span>₹{(order?.total - (order?.discount_amount || 0)).toFixed(2)}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -192,10 +219,14 @@ function GuestOrderContent() {
                             >
                                 <div>
                                     <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>#{prev.id.slice(0, 8).toUpperCase()}</div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(prev.created_at).toLocaleDateString()}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{new Date(prev.created_at).toLocaleDateString()}</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#666' }}>
+                                        {prev.items?.slice(0, 2).map((i: any) => `${i.quantity}x ${i.menu_item?.name}`).join(', ')}
+                                        {prev.items?.length > 2 && '...'}
+                                    </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.9rem' }}>₹{prev.total.toFixed(2)}</div>
+                                    <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.9rem' }}>₹{(prev.total - (prev.discount_amount || 0)).toFixed(2)}</div>
                                     <div style={{
                                         fontSize: '0.7rem',
                                         textTransform: 'uppercase',

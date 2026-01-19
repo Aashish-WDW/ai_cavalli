@@ -19,6 +19,7 @@ import {
     Utensils
 } from 'lucide-react'
 import Link from 'next/link'
+import { ImageSelector } from '@/components/ui/ImageSelector'
 
 interface Announcement {
     id: string
@@ -267,42 +268,11 @@ export default function CMSPage() {
                                 />
                             </div>
 
-                            <ItalianFormField
-                                label="Image URL"
-                                icon={<Image size={16} />}
+                            <ImageSelector
+                                label="Announcement Image"
                                 value={imageUrl}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setImageUrl(e.target.value)}
-                                placeholder="https://..."
+                                onChange={(val) => setImageUrl(val)}
                             />
-
-                            {imageUrl && (
-                                <div style={{
-                                    width: '100%',
-                                    height: '200px',
-                                    borderRadius: '16px',
-                                    overflow: 'hidden',
-                                    border: '3px solid rgba(var(--primary-rgb), 0.15)',
-                                    position: 'relative',
-                                    boxShadow: '0 4px 16px rgba(0,0,0,0.08)'
-                                }}>
-                                    <img src={imageUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '16px',
-                                        left: '16px',
-                                        background: 'rgba(var(--primary-rgb), 0.92)',
-                                        color: 'white',
-                                        padding: '8px 16px',
-                                        borderRadius: '10px',
-                                        fontSize: '0.7rem',
-                                        fontWeight: '700',
-                                        backdropFilter: 'blur(8px)',
-                                        letterSpacing: '0.08em',
-                                    }}>
-                                        PREVIEW
-                                    </div>
-                                </div>
-                            )}
 
                             <ItalianFormField
                                 label="Link (Optional)"
@@ -421,14 +391,14 @@ export default function CMSPage() {
                         )}
                     </div>
                 </div>
-            </div>
+            </div >
 
             <style>{`
                 @keyframes spin {
                     to { transform: rotate(360deg); }
                 }
             `}</style>
-        </div>
+        </div >
     )
 }
 

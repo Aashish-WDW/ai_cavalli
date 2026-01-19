@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Trash2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { ImageSelector } from '@/components/ui/ImageSelector'
 
 interface MenuItem {
     id: string;
@@ -208,14 +209,22 @@ export default function KitchenSpecialsPage() {
                     </div>
                 ) : (
                     <form onSubmit={handleQuickCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '3rem' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
-                            <Input label="Dish Name" placeholder="e.g. Eggs Benedict" value={newName} onChange={e => setNewName(e.target.value)} required />
-                            <Input label="Price (₹)" type="number" step="0.01" value={newPrice} onChange={e => setNewPrice(e.target.value)} required />
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                            <div style={{ flex: 2, minWidth: '240px' }}>
+                                <Input label="Dish Name" placeholder="e.g. Eggs Benedict" value={newName} onChange={e => setNewName(e.target.value)} required />
+                            </div>
+                            <div style={{ flex: 1, minWidth: '120px' }}>
+                                <Input label="Price (₹)" type="number" step="0.01" value={newPrice} onChange={e => setNewPrice(e.target.value)} required />
+                            </div>
                         </div>
 
                         <Input label="Description" placeholder="Optional details about the dish..." value={newDescription} onChange={e => setNewDescription(e.target.value)} />
 
-                        <Input label="Image URL (Public)" placeholder="https://..." value={newImageUrl} onChange={e => setNewImageUrl(e.target.value)} />
+                        <ImageSelector
+                            label="Dish Image"
+                            value={newImageUrl}
+                            onChange={(val) => setNewImageUrl(val)}
+                        />
 
                         <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
                             <div style={{ width: '150px' }}>

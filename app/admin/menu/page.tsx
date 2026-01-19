@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loading } from '@/components/ui/Loading'
 import {
-    Trash2,
     Edit2,
     Plus,
     Search,
@@ -15,9 +14,12 @@ import {
     X,
     Filter,
     ArrowLeft,
-    Save
+    Save,
+    Trash2,
+    Utensils
 } from 'lucide-react'
 import Link from 'next/link'
+import { ImageSelector } from '@/components/ui/ImageSelector'
 
 interface MenuItem {
     id: string;
@@ -158,331 +160,696 @@ export default function AdminMenuPage() {
     if (dataLoading) return <Loading />
 
     return (
-        <div className="container" style={{
-            paddingBottom: 'var(--space-12)',
-            paddingLeft: 'var(--space-4)',
-            paddingRight: 'var(--space-4)',
-            maxWidth: '1400px',
-            margin: '0 auto'
+        <div style={{
+            minHeight: '100vh',
+            background: 'rgb(245,245,245)',
+            padding: 'clamp(1rem, 3vw, 2.5rem)',
         }}>
-            {/* Header */}
-            <div style={{ marginBottom: 'var(--space-10)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', paddingTop: 'var(--space-6)' }}>
-                <Link href="/admin">
-                    <Button variant="ghost" size="sm" style={{ borderRadius: '50%', width: '40px', height: '40px', padding: 0 }}>
-                        <ArrowLeft size={20} />
-                    </Button>
-                </Link>
-                <div>
-                    <h1 style={{ fontSize: '2.5rem', fontFamily: 'var(--font-serif)', margin: 0, color: 'var(--text)' }}>Menu Management</h1>
-                    <p style={{ color: 'var(--text-muted)', margin: 0 }}>Configure and manage your menu items</p>
-                </div>
-            </div>
-
             <div style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : '1fr 1.5fr',
-                gap: 'var(--space-8)',
-                alignItems: 'start'
-            }}>
-                {/* Editor Sidebar */}
-                <div style={{
-                    background: 'var(--surface)',
-                    padding: 'var(--space-8)',
-                    borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--border)',
-                    boxShadow: 'var(--shadow-md)',
-                    position: isMobile ? 'static' : 'sticky',
-                    top: 'var(--space-6)',
-                    marginBottom: isMobile ? 'var(--space-8)' : 0
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
-                        <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: 'var(--radius-sm)',
-                            background: 'var(--primary)',
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: 'radial-gradient(circle at 20px 20px, rgba(var(--primary-rgb), 0.03) 1px, transparent 0)',
+                backgroundSize: '40px 40px',
+                pointerEvents: 'none',
+                zIndex: 0
+            }} />
+
+            <div style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+                {/* Header Section */}
+                <div style={{ marginBottom: '3rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                    <Link href="/admin" style={{ textDecoration: 'none' }}>
+                        <button style={{
+                            width: '52px',
+                            height: '52px',
+                            borderRadius: '50%',
+                            border: '2px solid var(--primary)',
+                            background: 'white',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: 'white'
-                        }}>
-                            {editingId ? <Edit2 size={16} /> : <Plus size={16} />}
-                        </div>
-                        <h3 style={{ margin: 0, fontWeight: 800 }}>{editingId ? 'Edit Item' : 'Create New Item'}</h3>
-                    </div>
-
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-                        <Input
-                            label="Item Name"
-                            placeholder="e.g. Wagyu Truffle Burger"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                            required
-                        />
-
-                        <div>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description</label>
-                            <textarea
-                                value={desc}
-                                onChange={e => setDesc(e.target.value)}
-                                placeholder="Describe the ingredients and preparation..."
-                                style={{
-                                    width: '100%',
-                                    padding: 'var(--space-3)',
-                                    borderRadius: 'var(--radius)',
-                                    border: '1px solid var(--border)',
-                                    minHeight: '100px',
-                                    fontSize: '0.9rem',
-                                    resize: 'vertical'
-                                }}
-                            />
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-                            <Input
-                                label="Price (₹)"
-                                type="number"
-                                step="0.01"
-                                value={price}
-                                onChange={e => setPrice(e.target.value)}
-                                required
-                            />
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Category</label>
-                                <select
-                                    value={categoryId}
-                                    onChange={e => setCategoryId(e.target.value)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '0.85rem',
-                                        borderRadius: 'var(--radius)',
-                                        border: '1px solid var(--border)',
-                                        background: 'white',
-                                        fontSize: '0.9rem'
-                                    }}
-                                >
-                                    {categories.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <Input
-                            label="Image URL"
-                            placeholder="https://images.unsplash.com/..."
-                            value={imageUrl}
-                            onChange={e => setImageUrl(e.target.value)}
-                        />
-
-                        {imageUrl && (
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease',
+                            boxShadow: '0 2px 8px rgba(var(--primary-rgb), 0.1)'
+                        }}
+                            onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                e.currentTarget.style.background = 'var(--primary)'
+                                const svg = e.currentTarget.querySelector('svg')
+                                if (svg) svg.style.color = 'white'
+                            }}
+                            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                e.currentTarget.style.background = 'white'
+                                const svg = e.currentTarget.querySelector('svg')
+                                if (svg) svg.style.color = 'var(--primary)'
+                            }}
+                        >
+                            <ArrowLeft size={22} color="var(--primary)" style={{ transition: 'all 0.3s ease' }} />
+                        </button>
+                    </Link>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
                             <div style={{
-                                width: '100%',
-                                height: '140px',
-                                borderRadius: 'var(--radius)',
-                                overflow: 'hidden',
-                                border: '1px solid var(--border)',
-                                background: 'rgba(0,0,0,0.02)'
+                                background: 'var(--primary)',
+                                padding: '14px',
+                                borderRadius: '16px',
+                                boxShadow: '0 4px 16px rgba(var(--primary-rgb), 0.25)'
                             }}>
-                                <img src={imageUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <Utensils size={28} color="white" />
                             </div>
-                        )}
+                            <div>
+                                <h1 style={{
+                                    fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+                                    fontWeight: '600',
+                                    margin: 0,
+                                    color: 'var(--text)',
+                                    letterSpacing: '-0.01em',
+                                }}>
+                                    Menu Management
+                                </h1>
+                                <p style={{
+                                    color: 'var(--text-muted)',
+                                    margin: '4px 0 0 0',
+                                    fontSize: 'clamp(0.9rem, 2vw, 1.1rem)',
+                                    fontWeight: '400',
+                                    fontStyle: 'italic'
+                                }}>
+                                    Configure and manage your restaurant menu items
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))',
+                    gap: '2.5rem',
+                    alignItems: 'start'
+                }}>
+                    {/* Editor Section */}
+                    <div style={{
+                        background: 'white',
+                        padding: '2.5rem',
+                        borderRadius: '24px',
+                        border: '1px solid rgba(var(--primary-rgb), 0.15)',
+                        boxShadow: '0 8px 32px rgba(var(--primary-rgb), 0.08)',
+                        position: isMobile ? 'static' : 'sticky',
+                        top: '2rem'
+                    }}>
                         <div style={{
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: 'var(--space-4)',
-                            background: 'rgba(0,0,0,0.02)',
-                            borderRadius: 'var(--radius)',
-                            border: '1px solid var(--border)'
+                            gap: '16px',
+                            marginBottom: '2rem',
+                            paddingBottom: '1.5rem',
+                            borderBottom: '2px solid rgba(var(--primary-rgb), 0.1)'
                         }}>
-                            <span style={{ fontSize: '0.875rem', fontWeight: 700 }}>Available for Order</span>
-                            <div
-                                onClick={() => setAvailable(!available)}
-                                style={{
-                                    width: '44px',
-                                    height: '24px',
-                                    borderRadius: '12px',
-                                    background: available ? 'var(--primary)' : 'var(--text-muted)',
-                                    transition: 'var(--transition)',
-                                    cursor: 'pointer',
-                                    position: 'relative'
-                                }}
-                            >
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '3px',
-                                    left: available ? '23px' : '3px',
-                                    width: '18px',
-                                    height: '18px',
-                                    borderRadius: '50%',
-                                    background: 'white',
-                                    transition: 'var(--transition)'
-                                }} />
+                            <div style={{
+                                width: '48px',
+                                height: '48px',
+                                borderRadius: '14px',
+                                background: 'var(--primary)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 4px 16px rgba(var(--primary-rgb), 0.25)'
+                            }}>
+                                {editingId ? <Edit2 size={24} color="white" /> : <Plus size={24} color="white" />}
                             </div>
+                            <h3 style={{
+                                margin: 0,
+                                fontWeight: '600',
+                                fontSize: '1.5rem',
+                                color: 'var(--text)',
+                            }}>
+                                {editingId ? 'Edit Item' : 'New Menu Item'}
+                            </h3>
                         </div>
 
-                        <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-                            <Button type="submit" isLoading={loading} style={{ flex: 2, height: '48px' }}>
-                                <Save size={18} style={{ marginRight: '8px' }} />
-                                {editingId ? 'Update Item' : 'Create Item'}
-                            </Button>
-                            {editingId && (
-                                <Button type="button" variant="outline" onClick={resetForm} style={{ flex: 1 }}>
-                                    Cancel
-                                </Button>
-                            )}
-                        </div>
-                    </form>
-                </div>
-
-                {/* List Section */}
-                <div>
-                    {/* Filters & Search */}
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 'var(--space-4)',
-                        marginBottom: 'var(--space-6)'
-                    }}>
-                        <div style={{ position: 'relative' }}>
-                            <Search
-                                size={18}
-                                style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
+                        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+                            <ItalianFormField
+                                label="Item Name"
+                                value={name}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
+                                placeholder="e.g. Wagyu Truffle Burger"
+                                required
                             />
-                            <input
-                                placeholder="Search menu items..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '14px 14px 14px 48px',
-                                    borderRadius: 'var(--radius-lg)',
-                                    border: '1px solid var(--border)',
-                                    fontSize: '1rem',
-                                    boxShadow: 'var(--shadow-sm)'
-                                }}
-                            />
-                        </div>
 
-                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                            <button
-                                onClick={() => setSelectedCategory('all')}
-                                style={{
-                                    padding: '8px 16px',
-                                    borderRadius: '20px',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 700,
-                                    whiteSpace: 'nowrap',
-                                    background: selectedCategory === 'all' ? 'var(--primary)' : 'var(--surface)',
-                                    color: selectedCategory === 'all' ? 'white' : 'var(--text-muted)',
-                                    border: '1px solid var(--border)',
-                                    cursor: 'pointer',
-                                    transition: 'var(--transition)'
-                                }}
-                            >
-                                All Items
-                            </button>
-                            {categories.map(c => (
-                                <button
-                                    key={c.id}
-                                    onClick={() => setSelectedCategory(c.id)}
+                            <div>
+                                <label style={{
+                                    display: 'block',
+                                    marginBottom: '12px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '700',
+                                    color: 'var(--text-muted)',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.1em',
+                                }}>
+                                    Description
+                                </label>
+                                <textarea
+                                    value={desc}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDesc(e.target.value)}
+                                    placeholder="Describe the ingredients and preparation..."
                                     style={{
-                                        padding: '8px 16px',
-                                        borderRadius: '20px',
-                                        fontSize: '0.8rem',
-                                        fontWeight: 700,
-                                        whiteSpace: 'nowrap',
-                                        background: selectedCategory === c.id ? 'var(--primary)' : 'var(--surface)',
-                                        color: selectedCategory === c.id ? 'white' : 'var(--text-muted)',
-                                        border: '1px solid var(--border)',
+                                        width: '100%',
+                                        padding: '16px 18px',
+                                        borderRadius: '14px',
+                                        border: '2px solid rgba(var(--primary-rgb), 0.15)',
+                                        minHeight: '120px',
+                                        fontSize: '1rem',
+                                        resize: 'vertical',
+                                        outline: 'none',
+                                        transition: 'all 0.3s ease',
+                                        background: 'white'
+                                    }}
+                                    onFocus={(e: React.FocusEvent<HTMLTextAreaElement>) => {
+                                        e.target.style.borderColor = 'var(--primary)'
+                                        e.target.style.boxShadow = '0 0 0 4px rgba(var(--primary-rgb), 0.08)'
+                                    }}
+                                    onBlur={(e: React.FocusEvent<HTMLTextAreaElement>) => {
+                                        e.target.style.borderColor = 'rgba(var(--primary-rgb), 0.15)'
+                                        e.target.style.boxShadow = 'none'
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                <ItalianFormField
+                                    label="Price (₹)"
+                                    type="number"
+                                    step="0.01"
+                                    value={price}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPrice(e.target.value)}
+                                    placeholder="0.00"
+                                    required
+                                />
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '12px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '700',
+                                        color: 'var(--text-muted)',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.1em',
+                                    }}>
+                                        Category
+                                    </label>
+                                    <select
+                                        value={categoryId}
+                                        onChange={e => setCategoryId(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '16px 18px',
+                                            borderRadius: '14px',
+                                            border: '2px solid rgba(var(--primary-rgb), 0.15)',
+                                            fontSize: '1rem',
+                                            outline: 'none',
+                                            transition: 'all 0.3s ease',
+                                            background: 'white',
+                                            cursor: 'pointer'
+                                        }}
+                                        onFocus={(e: React.FocusEvent<HTMLSelectElement>) => {
+                                            e.target.style.borderColor = 'var(--primary)'
+                                            e.target.style.boxShadow = '0 0 0 4px rgba(var(--primary-rgb), 0.08)'
+                                        }}
+                                        onBlur={(e: React.FocusEvent<HTMLSelectElement>) => {
+                                            e.target.style.borderColor = 'rgba(var(--primary-rgb), 0.15)'
+                                            e.target.style.boxShadow = 'none'
+                                        }}
+                                    >
+                                        {categories.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <ImageSelector
+                                label="Item Image"
+                                value={imageUrl}
+                                onChange={(val) => setImageUrl(val)}
+                            />
+
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '1.25rem',
+                                background: 'rgba(var(--primary-rgb), 0.03)',
+                                borderRadius: '14px',
+                                border: '1px solid rgba(var(--primary-rgb), 0.1)'
+                            }}>
+                                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text)' }}>Available for Order</span>
+                                <div
+                                    onClick={() => setAvailable(!available)}
+                                    style={{
+                                        width: '48px',
+                                        height: '26px',
+                                        borderRadius: '13px',
+                                        background: available ? 'var(--primary)' : 'var(--text-muted)',
+                                        transition: 'all 0.3s ease',
                                         cursor: 'pointer',
-                                        transition: 'var(--transition)'
+                                        position: 'relative'
                                     }}
                                 >
-                                    {c.name}
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '3px',
+                                        left: available ? '25px' : '3px',
+                                        width: '20px',
+                                        height: '20px',
+                                        borderRadius: '50%',
+                                        background: 'white',
+                                        transition: 'all 0.3s ease',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                    }} />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    style={{
+                                        flex: 2,
+                                        height: '58px',
+                                        background: 'var(--primary)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '14px',
+                                        fontSize: '1.05rem',
+                                        fontWeight: '600',
+                                        cursor: loading ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '12px',
+                                        transition: 'all 0.3s ease',
+                                        boxShadow: '0 4px 16px rgba(var(--primary-rgb), 0.3)',
+                                    }}
+                                    onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                        if (!loading) {
+                                            e.currentTarget.style.transform = 'translateY(-2px)'
+                                            e.currentTarget.style.boxShadow = '0 6px 24px rgba(var(--primary-rgb), 0.4)'
+                                        }
+                                    }}
+                                    onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                        e.currentTarget.style.transform = 'translateY(0)'
+                                        e.currentTarget.style.boxShadow = '0 4px 16px rgba(var(--primary-rgb), 0.3)'
+                                    }}
+                                >
+                                    {loading ? (
+                                        <div style={{ width: '22px', height: '22px', border: '3px solid white', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                    ) : (
+                                        <>
+                                            <Save size={20} />
+                                            {editingId ? 'Update Item' : 'Create Item'}
+                                        </>
+                                    )}
                                 </button>
-                            ))}
-                        </div>
+                                {editingId && (
+                                    <button
+                                        type="button"
+                                        onClick={resetForm}
+                                        style={{
+                                            flex: 1,
+                                            height: '58px',
+                                            background: 'white',
+                                            color: 'var(--text-muted)',
+                                            border: '2px solid rgba(var(--primary-rgb), 0.15)',
+                                            borderRadius: '14px',
+                                            fontSize: '1.05rem',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                            e.currentTarget.style.background = 'rgba(var(--primary-rgb), 0.05)'
+                                            e.currentTarget.style.borderColor = 'var(--primary)'
+                                        }}
+                                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                            e.currentTarget.style.background = 'white'
+                                            e.currentTarget.style.borderColor = 'rgba(var(--primary-rgb), 0.15)'
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                )}
+                            </div>
+                        </form>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                    {/* List Section */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                        {/* Filters & Search */}
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '1.5rem',
+                            padding: '0 0.5rem'
+                        }}>
+                            <div style={{ position: 'relative' }}>
+                                <Search
+                                    size={20}
+                                    style={{ position: 'absolute', left: '18px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
+                                />
+                                <input
+                                    placeholder="Search menu items..."
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '16px 16px 16px 52px',
+                                        borderRadius: '18px',
+                                        border: '2px solid rgba(var(--primary-rgb), 0.1)',
+                                        background: 'white',
+                                        fontSize: '1rem',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                                        outline: 'none',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = 'var(--primary)'
+                                        e.target.style.boxShadow = '0 4px 16px rgba(var(--primary-rgb), 0.1)'
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = 'rgba(var(--primary-rgb), 0.1)'
+                                        e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.03)'
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
+                                <button
+                                    onClick={() => setSelectedCategory('all')}
+                                    style={{
+                                        padding: '10px 22px',
+                                        borderRadius: '24px',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 700,
+                                        whiteSpace: 'nowrap',
+                                        background: selectedCategory === 'all' ? 'var(--primary)' : 'white',
+                                        color: selectedCategory === 'all' ? 'white' : 'var(--text-muted)',
+                                        border: '1.5px solid',
+                                        borderColor: selectedCategory === 'all' ? 'var(--primary)' : 'rgba(var(--primary-rgb), 0.15)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                >
+                                    All Items
+                                </button>
+                                {categories.map(c => (
+                                    <button
+                                        key={c.id}
+                                        onClick={() => setSelectedCategory(c.id)}
+                                        style={{
+                                            padding: '10px 22px',
+                                            borderRadius: '24px',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 700,
+                                            whiteSpace: 'nowrap',
+                                            background: selectedCategory === c.id ? 'var(--primary)' : 'white',
+                                            color: selectedCategory === c.id ? 'white' : 'var(--text-muted)',
+                                            border: '1.5px solid',
+                                            borderColor: selectedCategory === c.id ? 'var(--primary)' : 'rgba(var(--primary-rgb), 0.15)',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                    >
+                                        {c.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         {filteredItems.length === 0 ? (
-                            <div style={{ padding: 'var(--space-12)', textAlign: 'center', background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                                <div style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
-                                    <ImageIcon size={48} />
+                            <div style={{
+                                padding: '5rem 2rem',
+                                textAlign: 'center',
+                                background: 'white',
+                                borderRadius: '24px',
+                                border: '2px dashed rgba(var(--primary-rgb), 0.2)'
+                            }}>
+                                <div style={{ color: 'var(--border)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+                                    <ImageIcon size={72} strokeWidth={1.5} />
                                 </div>
-                                <h3 style={{ margin: '0 0 8px 0' }}>No items found</h3>
-                                <p style={{ color: 'var(--text-muted)', margin: 0 }}>Try adjusting your search or category filter.</p>
+                                <h3 style={{ margin: '0 0 12px 0', fontSize: '1.5rem', color: 'var(--text)', fontWeight: '600' }}>
+                                    No items found
+                                </h3>
+                                <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                                    Try adjusting your search or category filter
+                                </p>
                             </div>
                         ) : (
-                            filteredItems.map(item => (
-                                <div key={item.id} className="hover-lift" style={{
-                                    background: 'var(--surface)',
-                                    padding: 'var(--space-4)',
-                                    borderRadius: 'var(--radius-lg)',
-                                    display: 'flex',
-                                    gap: 'var(--space-4)',
-                                    alignItems: 'center',
-                                    border: item.id === editingId ? '2px solid var(--primary)' : '1px solid var(--border)',
-                                    boxShadow: 'var(--shadow-sm)',
-                                    opacity: item.available ? 1 : 0.7,
-                                    transition: 'var(--transition)'
-                                }}>
-                                    <div style={{
-                                        width: '80px',
-                                        height: '80px',
-                                        borderRadius: 'var(--radius-md)',
-                                        overflow: 'hidden',
-                                        background: 'rgba(0,0,0,0.05)',
-                                        flexShrink: 0
-                                    }}>
-                                        {item.image_url ? (
-                                            <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                        ) : (
-                                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyItems: 'center', color: 'var(--text-muted)' }}>
-                                                <ImageIcon size={24} style={{ margin: '0 auto' }} />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                            <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800 }}>{item.name}</h4>
-                                            {!item.available && (
-                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#FEF2F2', color: '#DC2626', padding: '2px 8px', borderRadius: '10px', textTransform: 'uppercase' }}>Hidden</span>
-                                            )}
-                                        </div>
-                                        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {item.category?.name} • <span style={{ fontWeight: 700, color: 'var(--primary)' }}>₹{item.price.toFixed(2)}</span>
-                                        </p>
-                                    </div>
-
-                                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => handleEdit(item)}
-                                            style={{ color: 'var(--primary)', width: '36px', height: '36px', padding: 0 }}
-                                        >
-                                            <Edit2 size={16} />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => handleDelete(item.id)}
-                                            style={{ color: '#EF4444', width: '36px', height: '36px', padding: 0 }}
-                                        >
-                                            <Trash2 size={16} />
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 310px), 1fr))',
+                                gap: '1.5rem'
+                            }}>
+                                {filteredItems.map(item => (
+                                    <ItalianMenuItemCard
+                                        key={item.id}
+                                        item={item}
+                                        isActive={item.id === editingId}
+                                        onEdit={handleEdit}
+                                        onDelete={handleDelete}
+                                    />
+                                ))}
+                            </div>
                         )}
                     </div>
+                </div>
+            </div>
+
+            <style>{`
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
+        </div>
+    )
+}
+
+function ItalianFormField({ label, icon, ...props }: { label: React.ReactNode; icon?: React.ReactNode;[x: string]: any; }) {
+    return (
+        <div>
+            <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '12px',
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+            }}>
+                {icon}
+                {label}
+            </label>
+            <input
+                {...props}
+                style={{
+                    width: '100%',
+                    padding: '16px 18px',
+                    borderRadius: '14px',
+                    border: '2px solid rgba(var(--primary-rgb), 0.15)',
+                    fontSize: '1rem',
+                    transition: 'all 0.3s ease',
+                    outline: 'none',
+                    background: 'white',
+                }}
+                onFocus={(e: React.FocusEvent<HTMLInputElement>) => {
+                    e.target.style.borderColor = 'var(--primary)'
+                    e.target.style.boxShadow = '0 0 0 4px rgba(var(--primary-rgb), 0.08)'
+                }}
+                onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                    e.target.style.borderColor = 'rgba(var(--primary-rgb), 0.15)'
+                    e.target.style.boxShadow = 'none'
+                }}
+            />
+        </div>
+    )
+}
+
+function ItalianMenuItemCard({ item, isActive, onEdit, onDelete }: {
+    item: MenuItem;
+    isActive: boolean;
+    onEdit: (item: MenuItem) => void;
+    onDelete: (id: string) => void;
+}) {
+    return (
+        <div style={{
+            background: 'white',
+            borderRadius: '20px',
+            overflow: 'hidden',
+            border: isActive ? '2px solid var(--primary)' : '1px solid rgba(var(--primary-rgb), 0.15)',
+            boxShadow: isActive ? '0 8px 24px rgba(var(--primary-rgb), 0.15)' : '0 4px 16px rgba(var(--primary-rgb), 0.08)',
+            display: 'flex',
+            flexDirection: 'column',
+            transition: 'all 0.4s ease',
+            opacity: item.available ? 1 : 0.8,
+            cursor: 'default'
+        }}
+            onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => {
+                if (!isActive) {
+                    e.currentTarget.style.transform = 'translateY(-6px)'
+                    e.currentTarget.style.boxShadow = '0 12px 32px rgba(var(--primary-rgb), 0.15)'
+                }
+            }}
+            onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => {
+                if (!isActive) {
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(var(--primary-rgb), 0.08)'
+                }
+            }}
+        >
+            <div style={{
+                width: '100%',
+                height: '180px',
+                background: 'rgba(var(--primary-rgb), 0.05)',
+                position: 'relative',
+                borderBottom: '1px solid rgba(var(--primary-rgb), 0.1)'
+            }}>
+                {item.image_url ? (
+                    <img
+                        src={item.image_url}
+                        alt={item.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                        <ImageIcon size={48} strokeWidth={1} />
+                    </div>
+                )}
+                {!item.available && (
+                    <div style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        background: 'rgba(220, 38, 38, 0.9)',
+                        color: 'white',
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        fontSize: '0.7rem',
+                        fontWeight: '800',
+                        textTransform: 'uppercase'
+                    }}>
+                        Hidden
+                    </div>
+                )}
+                <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    left: '12px',
+                    background: 'rgba(var(--primary-rgb), 0.9)',
+                    color: 'white',
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.7rem',
+                    fontWeight: '800'
+                }}>
+                    {item.category?.name}
+                </div>
+            </div>
+
+            <div style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ marginBottom: '1rem' }}>
+                    <h4 style={{
+                        margin: '0 0 4px 0',
+                        fontSize: '1.25rem',
+                        fontWeight: '600',
+                        color: 'var(--text)',
+                        lineHeight: 1.3
+                    }}>
+                        {item.name}
+                    </h4>
+                    <span style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--primary)' }}>₹{item.price.toFixed(2)}</span>
+                </div>
+
+                <p style={{
+                    fontSize: '0.9rem',
+                    color: 'var(--text-muted)',
+                    margin: '0 0 1.5rem 0',
+                    lineHeight: 1.6,
+                    flex: 1,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden'
+                }}>
+                    {item.description}
+                </p>
+
+                <div style={{
+                    display: 'flex',
+                    gap: '10px',
+                    paddingTop: '1.25rem',
+                    borderTop: '1px solid rgba(var(--primary-rgb), 0.1)',
+                }}>
+                    <button
+                        onClick={() => onEdit(item)}
+                        style={{
+                            flex: 1,
+                            height: '42px',
+                            background: 'rgba(var(--primary-rgb), 0.08)',
+                            color: 'var(--primary)',
+                            border: '1px solid rgba(var(--primary-rgb), 0.2)',
+                            borderRadius: '10px',
+                            fontWeight: '700',
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            transition: 'all 0.3s ease'
+                        }}
+                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            e.currentTarget.style.background = 'var(--primary)'
+                            e.currentTarget.style.color = 'white'
+                        }}
+                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            e.currentTarget.style.background = 'rgba(var(--primary-rgb), 0.08)'
+                            e.currentTarget.style.color = 'var(--primary)'
+                        }}
+                    >
+                        <Edit2 size={16} />
+                        EDIT
+                    </button>
+                    <button
+                        onClick={() => onDelete(item.id)}
+                        style={{
+                            width: '42px',
+                            height: '42px',
+                            background: 'rgba(220, 38, 38, 0.08)',
+                            color: '#DC2626',
+                            border: '1px solid rgba(220, 38, 38, 0.2)',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.3s ease'
+                        }}
+                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            e.currentTarget.style.background = '#DC2626'
+                            e.currentTarget.style.color = 'white'
+                        }}
+                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            e.currentTarget.style.background = 'rgba(220, 38, 38, 0.08)'
+                            e.currentTarget.style.color = '#DC2626'
+                        }}
+                    >
+                        <Trash2 size={18} />
+                    </button>
                 </div>
             </div>
         </div>
     )
 }
+

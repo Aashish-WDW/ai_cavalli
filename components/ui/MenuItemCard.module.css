@@ -121,3 +121,48 @@
 .addButton:active {
     transform: scale(0.95);
 }
+
+.quantityControls {
+    display: flex;
+    align-items: center;
+    background: var(--primary);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.2);
+    transition: all 0.3s ease;
+}
+
+.qtyBtn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    border-radius: var(--radius-xs);
+    transition: background 0.2s ease;
+}
+
+.qtyBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.qtyBtn:active {
+    transform: scale(0.9);
+}
+
+.qtyBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.quantity {
+    min-width: 32px;
+    text-align: center;
+    font-weight: 800;
+    color: white;
+    font-size: 0.95rem;
+}

@@ -17,7 +17,9 @@ import {
     Sparkles,
     Activity,
     DollarSign,
-    Package
+    Package,
+    ChefHat,
+    LogOut
 } from 'lucide-react'
 import {
     AreaChart,
@@ -39,6 +41,8 @@ import { supabase } from '@/lib/database/supabase'
 import { Button } from '@/components/ui/button'
 import { Loading } from '@/components/ui/Loading'
 import Link from 'next/link'
+import { useAuth } from '@/lib/auth/context'
+import { useCart } from '@/lib/context/CartContext'
 
 interface Order {
     id: string
@@ -64,11 +68,25 @@ export default function AdminDashboard() {
     })
 
     const [recentOrders, setRecentOrders] = useState<Order[]>([])
+    const [allOrders, setAllOrders] = useState<Order[]>([])
+    const [currentPage, setCurrentPage] = useState(1)
+    const itemsPerPage = 10
     const [revenueData, setRevenueData] = useState<any[]>([])
     const [categoryData, setCategoryData] = useState<any[]>([])
     const [demographicData, setDemographicData] = useState<any[]>([])
     const [hourlyData, setHourlyData] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const { signOut } = useAuth()
+    const { clearCart } = useCart()
+
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date()
+        d.setDate(1)
+        return d.toISOString().split('T')[0]
+    })
+    const [endDate, setEndDate] = useState(() => {
+        return new Date().toISOString().split('T')[0]
+    })
 
     useEffect(() => {
         fetchData()
@@ -108,7 +126,8 @@ export default function AdminDashboard() {
                 avgOrderValue: parseFloat(avgVal),
                 todayRevenue
             })
-            setRecentOrders(orders.slice(0, 5))
+            setAllOrders(orders)
+            setRecentOrders(orders.slice(0, 10))
 
             // 1. Process Revenue Data
             const dailyRevenue: { [key: string]: { date: string, amount: number, orders: number } } = {}
@@ -174,6 +193,8 @@ export default function AdminDashboard() {
                     menu_item:menu_items(name)
                 )
             `)
+            .gte('created_at', `${startDate}T00:00:00`)
+            .lte('created_at', `${endDate}T23:59:59`)
             .order('created_at', { ascending: false })
             .then(({ data }) => {
                 if (!data) return
@@ -209,59 +230,89 @@ export default function AdminDashboard() {
             padding: 'clamp(1rem, 3vw, 2rem)',
             fontFamily: 'system-ui, -apple-system, sans-serif'
         }}>
-            {/* Animated Background Elements */}
-            <div style={{ position: 'fixed', top: '10%', left: '5%', width: '400px', height: '400px', background: 'radial-gradient(circle, rgba(192,39,45,0.08) 0%, transparent 70%)', borderRadius: '50%', filter: 'blur(60px)', pointerEvents: 'none' }} />
-            <div style={{ position: 'fixed', bottom: '10%', right: '5%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(192,39,45,0.06) 0%, transparent 70%)', borderRadius: '50%', filter: 'blur(80px)', pointerEvents: 'none' }} />
+            <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: 'radial-gradient(circle at 20px 20px, rgba(var(--primary-rgb), 0.03) 1px, transparent 0)',
+                backgroundSize: '40px 40px',
+                pointerEvents: 'none',
+                zIndex: 0
+            }} />
 
             <div style={{ maxWidth: '1600px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
                 {/* Header */}
-                <div style={{ marginBottom: '2rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ marginBottom: '3rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1.5rem' }}>
                         <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
                                 <div style={{
-                                    background: 'linear-gradient(135deg, #C0272D 0%, #EF4444 100%)',
-                                    padding: '12px',
+                                    background: 'var(--primary)',
+                                    padding: '14px',
                                     borderRadius: '16px',
-                                    boxShadow: '0 8px 16px rgba(192,39,45,0.3)'
+                                    boxShadow: '0 4px 16px rgba(var(--primary-rgb), 0.25)'
                                 }}>
                                     <Activity size={28} color="white" />
                                 </div>
                                 <h1 style={{
-                                    fontSize: '3rem',
-                                    fontWeight: '900',
+                                    fontSize: 'clamp(2.5rem, 5vw, 3.5rem)',
+                                    fontWeight: '600',
                                     margin: 0,
-                                    background: 'linear-gradient(135deg, #fff 0%, #94a3b8 100%)',
-                                    WebkitBackgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent',
-                                    letterSpacing: '-0.03em'
+                                    color: 'var(--text)',
+                                    letterSpacing: '-0.01em',
                                 }}>
                                     Command Center
                                 </h1>
                             </div>
-                            <p style={{ color: '#6b7280', margin: 0, fontSize: '1rem', fontWeight: '500' }}>
+                            <p style={{
+                                color: 'var(--text-muted)',
+                                margin: '4px 0 0 0',
+                                fontSize: 'clamp(0.9rem, 2vw, 1.1rem)',
+                                fontWeight: '400',
+                                fontStyle: 'italic'
+                            }}>
                                 Real-time system analytics and control
                             </p>
                         </div>
-                        <button onClick={downloadCSV} style={{
-                            background: 'rgba(255,255,255,0.1)',
-                            backdropFilter: 'blur(10px)',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            color: '#1f2937',
-                            padding: '14px 28px',
-                            borderRadius: '12px',
-                            fontWeight: '700',
-                            fontSize: '0.95rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            transition: 'all 0.3s ease',
-                            boxShadow: '0 8px 16px rgba(0,0,0,0.1)'
-                        }}>
-                            <Download size={18} />
-                            Export Data
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '8px 16px', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.1)' }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b' }}>FROM</span>
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    style={{ background: 'transparent', border: 'none', color: '#1f2937', fontWeight: '600', outline: 'none' }}
+                                />
+                                <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#64748b', marginLeft: '8px' }}>TO</span>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    style={{ background: 'transparent', border: 'none', color: '#1f2937', fontWeight: '600', outline: 'none' }}
+                                />
+                            </div>
+                            <button onClick={downloadCSV} style={{
+                                background: 'rgba(255,255,255,0.1)',
+                                backdropFilter: 'blur(10px)',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                color: '#1f2937',
+                                padding: '14px 28px',
+                                borderRadius: '12px',
+                                fontWeight: '700',
+                                fontSize: '0.95rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                transition: 'all 0.3s ease',
+                                boxShadow: '0 8px 16px rgba(0,0,0,0.1)'
+                            }}>
+                                <Download size={18} />
+                                Export Data
+                            </button>
+                        </div>
                     </div>
 
                     {/* Live Status Bar */}
@@ -491,11 +542,12 @@ export default function AdminDashboard() {
 
                     {/* Quick Actions */}
                     <div style={{
-                        background: 'linear-gradient(135deg, rgba(192,39,45,0.1) 0%, rgba(192,39,45,0.05) 100%)',
-                        border: '1px solid rgba(192,39,45,0.2)',
-                        borderRadius: '20px',
-                        padding: '24px',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                        background: 'white',
+                        border: '1px solid rgba(var(--primary-rgb), 0.15)',
+                        borderRadius: '24px',
+                        padding: '2rem',
+                        boxShadow: '0 8px 32px rgba(var(--primary-rgb), 0.05)',
+                        transition: 'all 0.4s ease'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
                             <Sparkles size={20} color="#C0272D" />
@@ -505,104 +557,213 @@ export default function AdminDashboard() {
                             <ActionButton icon={<MenuIcon size={16} />} label="Menu Management" href="/admin/menu" />
                             <ActionButton icon={<FileText size={16} />} label="Announcements" href="/admin/cms" />
                             <ActionButton icon={<Users size={16} />} label="User Control" href="/admin/users" />
-                            <ActionButton icon={<Settings size={16} />} label="Settings" />
+                            <ActionButton icon={<ChefHat size={16} />} label="Kitchen Display" href="/kitchen" />
+                            <ActionButton
+                                icon={<LogOut size={16} />}
+                                label="Logout"
+                                onClick={() => { clearCart(); signOut(); }}
+                            />
                         </div>
                     </div>
                 </div>
 
                 {/* Recent Orders Table */}
                 <div style={{
-                    background: 'rgba(15,23,42,0.6)',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '20px',
+                    background: 'white',
+                    border: '1px solid rgba(var(--primary-rgb), 0.15)',
+                    borderRadius: '28px',
                     overflow: 'hidden',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+                    boxShadow: '0 8px 32px rgba(var(--primary-rgb), 0.05)',
+                    transition: 'all 0.4s ease'
                 }}>
                     <div style={{
-                        padding: '24px',
-                        borderBottom: '1px solid rgba(255,255,255,0.1)',
+                        padding: '2rem',
+                        borderBottom: '1px solid rgba(var(--primary-rgb), 0.1)',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        background: 'linear-gradient(to right, rgba(var(--primary-rgb), 0.02), transparent)'
                     }}>
-                        <h3 style={{ margin: 0, fontWeight: '800', color: 'white', fontSize: '1.2rem' }}>
-                            Recent Transactions
-                        </h3>
-                        <button style={{
-                            background: 'transparent',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            color: '#94a3b8',
-                            padding: '8px 16px',
-                            borderRadius: '8px',
-                            fontWeight: '600',
-                            fontSize: '0.85rem',
-                            cursor: 'pointer'
-                        }}>
-                            View All
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{
+                                background: 'rgba(var(--primary-rgb), 0.1)',
+                                padding: '8px',
+                                borderRadius: '10px',
+                                color: 'var(--primary)'
+                            }}>
+                                <ShoppingBag size={20} />
+                            </div>
+                            <h3 style={{ margin: 0, fontWeight: '800', color: 'var(--text)', fontSize: '1.25rem', letterSpacing: '-0.01em' }}>
+                                Recent Transactions
+                            </h3>
+                        </div>
                     </div>
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
-                                <tr style={{ background: '#f9fafb' }}>
-                                    <th style={{ textAlign: 'left', padding: '16px 24px', fontSize: '0.7rem', fontWeight: '800', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Order ID</th>
-                                    <th style={{ textAlign: 'left', padding: '16px 24px', fontSize: '0.7rem', fontWeight: '800', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Table</th>
-                                    <th style={{ textAlign: 'left', padding: '16px 24px', fontSize: '0.7rem', fontWeight: '800', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                                    <th style={{ textAlign: 'left', padding: '16px 24px', fontSize: '0.7rem', fontWeight: '800', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Guests</th>
-                                    <th style={{ textAlign: 'left', padding: '16px 24px', fontSize: '0.7rem', fontWeight: '800', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time</th>
-                                    <th style={{ textAlign: 'right', padding: '16px 24px', fontSize: '0.7rem', fontWeight: '800', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount</th>
+                                <tr style={{ background: 'rgba(var(--primary-rgb), 0.02)' }}>
+                                    <th style={{ textAlign: 'left', padding: '1.25rem 2rem', fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Order ID</th>
+                                    <th style={{ textAlign: 'left', padding: '1.25rem 2rem', fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Table/Rider</th>
+                                    <th style={{ textAlign: 'left', padding: '1.25rem 2rem', fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                    <th style={{ textAlign: 'left', padding: '1.25rem 2rem', fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Details</th>
+                                    <th style={{ textAlign: 'left', padding: '1.25rem 2rem', fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time</th>
+                                    <th style={{ textAlign: 'right', padding: '1.25rem 2rem', fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {recentOrders.map((order, idx) => (
-                                    <tr key={order.id} style={{
-                                        borderTop: '1px solid #f1f5f9',
-                                        transition: 'all 0.2s ease'
-                                    }}>
-                                        <td style={{ padding: '20px 24px' }}>
-                                            <span style={{
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.85rem',
-                                                fontWeight: '700',
-                                                color: '#64748b'
-                                            }}>
-                                                #{order.id.slice(0, 8).toUpperCase()}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '20px 24px' }}>
-                                            <span style={{ fontWeight: '700', color: '#1f2937' }}>{order.table_name}</span>
-                                        </td>
-                                        <td style={{ padding: '20px 24px' }}>
-                                            <StatusBadge status={order.status} />
-                                        </td>
-                                        <td style={{ padding: '20px 24px' }}>
-                                            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '800' }}>
-                                                {order.num_guests || 1}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '20px 24px' }}>
-                                            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>
-                                                {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '20px 24px', textAlign: 'right' }}>
-                                            <span style={{ fontWeight: '800', color: '#10B981', fontSize: '1rem' }}>
-                                                ₹{order.total.toFixed(2)}
-                                            </span>
+                                {recentOrders.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+                                            <div style={{ color: 'var(--text-muted)', opacity: 0.3, marginBottom: '1rem' }}>
+                                                <ShoppingBag size={48} strokeWidth={1} style={{ margin: '0 auto' }} />
+                                            </div>
+                                            <p style={{ color: 'var(--text-muted)', fontWeight: '500' }}>No transactions found for this period</p>
                                         </td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    recentOrders.map((order) => (
+                                        <tr key={order.id} style={{
+                                            borderTop: '1px solid rgba(var(--primary-rgb), 0.05)',
+                                            transition: 'all 0.2s ease',
+                                        }} className="transaction-row">
+                                            <td style={{ padding: '1.5rem 2rem' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <span style={{
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: '700',
+                                                        color: 'var(--primary)'
+                                                    }}>
+                                                        #{order.id.slice(0, 8).toUpperCase()}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>ID: {order.id.slice(0, 4)}...</span>
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '1.5rem 2rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <div style={{
+                                                        width: '32px', height: '32px', borderRadius: '8px',
+                                                        background: 'rgba(var(--primary-rgb), 0.05)',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        color: 'var(--primary)', fontSize: '0.8rem', fontWeight: '800'
+                                                    }}>
+                                                        {order.table_name ? order.table_name[0] : 'R'}
+                                                    </div>
+                                                    <span style={{ fontWeight: '700', color: 'var(--text)' }}>{order.table_name || 'Rider Order'}</span>
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '1.5rem 2rem' }}>
+                                                <StatusBadge status={order.status} />
+                                            </td>
+                                            <td style={{ padding: '1.5rem 2rem' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <span style={{ fontSize: '0.85rem', color: 'var(--text)', fontWeight: '700' }}>
+                                                        {order.num_guests || 1} Guests
+                                                    </span>
+                                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Confirmed</span>
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '1.5rem 2rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                                    <Clock size={14} />
+                                                    <span style={{ fontWeight: '600' }}>
+                                                        {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '1.5rem 2rem', textAlign: 'right' }}>
+                                                <span style={{
+                                                    fontWeight: '800',
+                                                    color: '#10B981',
+                                                    fontSize: '1.1rem',
+                                                    background: 'rgba(16, 185, 129, 0.1)',
+                                                    padding: '4px 12px',
+                                                    borderRadius: '8px'
+                                                }}>
+                                                    ₹{order.total.toFixed(2)}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Pagination Controls */}
+                    <div style={{
+                        padding: '1.25rem 2rem',
+                        borderTop: '1px solid rgba(var(--primary-rgb), 0.1)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: 'rgba(var(--primary-rgb), 0.01)'
+                    }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>
+                            Showing page <span style={{ color: 'var(--primary)' }}>{currentPage}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                disabled={currentPage === 1}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(var(--primary-rgb), 0.15)',
+                                    background: 'white',
+                                    color: currentPage === 1 ? '#cbd5e1' : 'var(--text)',
+                                    fontWeight: '700',
+                                    fontSize: '0.85rem',
+                                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (currentPage !== 1) e.currentTarget.style.background = 'rgba(var(--primary-rgb), 0.05)'
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (currentPage !== 1) e.currentTarget.style.background = 'white'
+                                }}
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage(currentPage + 1)}
+                                disabled={recentOrders.length < 10}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(var(--primary-rgb), 0.15)',
+                                    background: 'white',
+                                    color: recentOrders.length < 10 ? '#cbd5e1' : 'var(--text)',
+                                    fontWeight: '700',
+                                    fontSize: '0.85rem',
+                                    cursor: recentOrders.length < 10 ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (recentOrders.length >= 10) e.currentTarget.style.background = 'rgba(var(--primary-rgb), 0.05)'
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (recentOrders.length >= 10) e.currentTarget.style.background = 'white'
+                                }}
+                            >
+                                Next Page
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <style>{`
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.5; }
+                .transaction-row:hover {
+                    background: rgba(var(--primary-rgb), 0.035) !important;
+                    transform: scale(1.002);
+                }
+                .transaction-row:hover td {
+                    color: var(--text) !important;
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
                 }
                 
                 /* Responsive table on mobile */
@@ -638,13 +799,13 @@ function StatCard({ label, value, icon, color, trend, subtitle, sparkline }: {
     return (
         <div style={{
             background: 'white',
-            border: '1px solid #e5e7eb',
-            borderRadius: '20px',
-            padding: '24px',
+            border: '1px solid rgba(var(--primary-rgb), 0.15)',
+            borderRadius: '24px',
+            padding: '2rem',
             position: 'relative',
             overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            transition: 'all 0.3s ease'
+            boxShadow: '0 8px 32px rgba(var(--primary-rgb), 0.05)',
+            transition: 'all 0.4s ease'
         }}>
             <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '120px', height: '120px', borderRadius: '50%', background: `radial-gradient(circle, ${color}20 0%, transparent 70%)`, filter: 'blur(20px)' }} />
 
@@ -689,11 +850,11 @@ function StatCard({ label, value, icon, color, trend, subtitle, sparkline }: {
             {/* Mini Sparkline */}
             <svg width="100%" height="40" style={{ marginTop: '16px' }}>
                 <polyline
-                    points={sparkline.map((val, idx) => `${(idx / (sparkline.length - 1)) * 100}%,${40 - (val / Math.max(...sparkline)) * 35}`).join(' ')}
+                    points={sparkline.map((val, idx) => `${(idx / (sparkline.length - 1)) * 100}%,${40 - (val / (Math.max(...sparkline) || 1)) * 35}`).join(' ')}
                     fill="none"
                     stroke={color}
                     strokeWidth="2"
-                    opacity="0.6"
+                    opacity="0.4"
                 />
             </svg>
         </div>
@@ -709,10 +870,11 @@ function ChartCard({ title, icon, color, children }: {
     return (
         <div style={{
             background: 'white',
-            border: '1px solid #e5e7eb',
-            borderRadius: '20px',
-            padding: '24px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            border: '1px solid rgba(var(--primary-rgb), 0.15)',
+            borderRadius: '24px',
+            padding: '2rem',
+            boxShadow: '0 8px 32px rgba(var(--primary-rgb), 0.05)',
+            transition: 'all 0.4s ease'
         }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
                 <div style={{
@@ -730,28 +892,53 @@ function ChartCard({ title, icon, color, children }: {
     )
 }
 
-function ActionButton({ icon, label, href }: { icon: React.ReactNode, label: string, href?: string }) {
+function ActionButton({ icon, label, href, onClick }: { icon: React.ReactNode, label: string, href?: string, onClick?: () => void }) {
     const Component = href ? Link : 'button'
     return (
-        <Component href={href as any} style={{
-            background: 'rgba(255,255,255,0.05)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(0,0,0,0.1)',
-            borderRadius: '12px',
-            padding: '14px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            color: '#1f2937',
-            fontWeight: '600',
-            fontSize: '0.9rem',
-            width: '100%',
-            textAlign: 'left',
-            textDecoration: 'none'
-        }}>
-            {icon}
+        <Component
+            href={href as any}
+            onClick={onClick}
+            style={{
+                background: 'rgba(var(--primary-rgb), 0.03)',
+                border: '1px solid rgba(var(--primary-rgb), 0.1)',
+                borderRadius: '16px',
+                padding: '1.25rem 1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                color: 'var(--text)',
+                fontWeight: '700',
+                fontSize: '0.95rem',
+                width: '100%',
+                textAlign: 'left',
+                textDecoration: 'none',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+            }}
+            onMouseEnter={(e: any) => {
+                e.currentTarget.style.background = 'rgba(var(--primary-rgb), 0.1)'
+                e.currentTarget.style.transform = 'translateX(5px)'
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(var(--primary-rgb), 0.1)'
+            }}
+            onMouseLeave={(e: any) => {
+                e.currentTarget.style.background = 'rgba(var(--primary-rgb), 0.03)'
+                e.currentTarget.style.transform = 'translateX(0)'
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)'
+            }}
+        >
+            <div style={{
+                background: 'white',
+                padding: '8px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+                color: 'var(--primary)'
+            }}>
+                {icon}
+            </div>
             <span>{label}</span>
         </Component>
     )

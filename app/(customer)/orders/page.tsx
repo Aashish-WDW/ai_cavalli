@@ -9,6 +9,7 @@ import { ChevronLeft, Package, Clock, CheckCircle2, XCircle } from 'lucide-react
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Loading } from '@/components/ui/Loading'
+import { Utensils } from 'lucide-react'
 
 export default function OrdersPage() {
     const { user } = useAuth()
@@ -26,7 +27,13 @@ export default function OrdersPage() {
         }
 
         async function fetchOrders() {
-            let query = supabase.from('orders').select('*')
+            let query = supabase.from('orders').select(`
+                *,
+                items:order_items(
+                    id, quantity, price,
+                    menu_item:menu_items(name)
+                )
+            `)
 
             if (user) {
                 query = query.eq('user_id', user.id)
@@ -141,14 +148,38 @@ export default function OrdersPage() {
                                         padding: 'var(--space-4)',
                                         background: 'var(--background)',
                                         borderRadius: 'var(--radius)',
+                                        border: '1px solid var(--border)',
+                                        marginBottom: 'var(--space-4)'
+                                    }}>
+                                        <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Order Summary</p>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                            {order.notes === 'REGULAR_STAFF_MEAL' ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--primary)', fontWeight: 600 }}>
+                                                    <Utensils size={16} />
+                                                    <span>Standard Regular Staff Meal</span>
+                                                </div>
+                                            ) : (
+                                                order.items?.map((item: any) => (
+                                                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 600 }}>
+                                                        <span style={{ color: 'var(--text)' }}>{item.quantity}x {item.menu_item?.name}</span>
+                                                        <span style={{ color: 'var(--text-muted)' }}>₹{(item.quantity * item.price).toFixed(2)}</span>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div style={{
+                                        padding: 'var(--space-4)',
+                                        background: 'rgba(var(--primary-rgb), 0.05)',
+                                        borderRadius: 'var(--radius)',
                                         display: 'flex',
                                         justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        marginTop: 'var(--space-2)'
+                                        alignItems: 'center'
                                     }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                                             <Package size={20} color="var(--primary)" />
-                                            <span style={{ fontWeight: 600 }}>Order Total</span>
+                                            <span style={{ fontWeight: 700 }}>Total Amount</span>
                                         </div>
                                         <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)' }}>₹{order.total.toFixed(2)}</span>
                                     </div>

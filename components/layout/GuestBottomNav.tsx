@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Home, Menu, ShoppingCart, Clock } from 'lucide-react'
 import clsx from 'clsx'
 import styles from './BottomNav.module.css'
+import { useCart } from '@/lib/context/CartContext'
 
 const tabs = [
     { name: 'Home', href: '/guest/home', icon: Home, ariaLabel: 'Go to home page' },
@@ -15,6 +16,8 @@ const tabs = [
 
 export function GuestBottomNav() {
     const pathname = usePathname()
+    const { items } = useCart()
+    const cartCount = items.length
 
     return (
         <nav className={styles.nav} role="navigation" aria-label="Guest navigation">
@@ -35,6 +38,9 @@ export function GuestBottomNav() {
                                 strokeWidth={isActive ? 2.5 : 2}
                                 aria-hidden="true"
                             />
+                            {tab.name === 'Cart' && cartCount > 0 && (
+                                <span className={styles.badge}>{cartCount}</span>
+                            )}
                         </div>
                         <span className={styles.label}>{tab.name}</span>
                     </Link>

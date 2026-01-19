@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth/context'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/database/supabase'
-import { ChevronLeft, User, Package, LogOut, MessageSquare, ShieldCheck } from 'lucide-react'
+import { ChevronLeft, User, Package, LogOut, MessageSquare, ShieldCheck, Utensils } from 'lucide-react'
 import Link from 'next/link'
 import { Loading } from '@/components/ui/Loading'
+import { useCart } from '@/lib/context/CartContext'
 
 export default function ProfilePage() {
     const { signOut, user, role } = useAuth()
+    const { clearCart } = useCart()
     const [userDetails, setUserDetails] = useState<any>(null)
     const [orders, setOrders] = useState<any[]>([])
     const [loadingOrders, setLoadingOrders] = useState(true)
@@ -29,7 +31,13 @@ export default function ProfilePage() {
         async function fetchOrders() {
             const { data } = await supabase
                 .from('orders')
-                .select('*')
+                .select(`
+                    *,
+                    items:order_items(
+                        id, quantity, price,
+                        menu_item:menu_items(name)
+                    )
+                `)
                 .eq('user_id', user!.id)
                 .order('created_at', { ascending: false })
 
@@ -134,7 +142,7 @@ export default function ProfilePage() {
                                 <MessageSquare size={18} style={{ marginRight: '8px' }} />
                                 Contact Support
                             </Button>
-                            <Button onClick={() => signOut()} variant="outline" style={{ flex: 1, minWidth: '180px' }}>
+                            <Button onClick={() => { clearCart(); signOut(); }} variant="outline" style={{ flex: 1, minWidth: '180px' }}>
                                 <LogOut size={18} style={{ marginRight: '8px' }} />
                                 Sign Out
                             </Button>
@@ -222,12 +230,39 @@ export default function ProfilePage() {
                                         letterSpacing: '0.05em'
                                     }}>{order.status}</span>
                                 </div>
+
+                                <div style={{ marginBottom: 'var(--space-3)' }}>
+                                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                                        {order.notes === 'REGULAR_STAFF_MEAL' ? (
+                                            <li style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 600 }}>
+                                                <Utensils size={14} />
+                                                <span>Standard Regular Staff Meal</span>
+                                            </li>
+                                        ) : (
+                                            order.items?.map((item: any) => (
+                                                <li key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#444', marginBottom: '2px' }}>
+                                                    <span>{item.quantity}x {item.menu_item?.name}</span>
+                                                    <span style={{ color: 'var(--text-muted)' }}>₹{(item.quantity * item.price).toFixed(2)}</span>
+                                                </li>
+                                            ))
+                                        )}
+                                    </ul>
+                                </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border)' }}>
                                     <div>
-                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
                                             {new Date(order.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </p>
-                                        <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--primary)' }}>₹{order.total.toFixed(2)}</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                            {order.discount_amount > 0 && (
+                                                <div style={{ fontSize: '0.75rem', color: '#DC2626', fontWeight: 600 }}>
+                                                    Discount: -₹{order.discount_amount.toFixed(2)}
+                                                </div>
+                                            )}
+                                            <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--primary)' }}>
+                                                ₹{(order.total - (order.discount_amount || 0)).toFixed(2)}
+                                            </span>
+                                        </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '2px' }}>LOCATION</p>

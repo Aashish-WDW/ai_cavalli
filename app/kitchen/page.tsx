@@ -21,7 +21,8 @@ import {
     Bell,
     CheckCircle2,
     Clock,
-    ShoppingBag
+    ShoppingBag,
+    Utensils
 } from 'lucide-react'
 import { Loading } from '@/components/ui/Loading'
 
@@ -179,7 +180,12 @@ export default function KitchenPage() {
     const getOrderTypeBadge = (order: Order) => {
         if (order.guest_info) return { label: 'GUEST', color: '#9333ea', icon: User }
         if (order.user?.role === 'student') return { label: 'RIDER', color: '#2563eb', icon: LayoutDashboard }
-        if (order.user?.role === 'staff') return { label: 'STAFF', color: '#059669', icon: Shield }
+        if (order.user?.role === 'staff') {
+            if (order.notes === 'REGULAR_STAFF_MEAL') {
+                return { label: 'REGULAR MEAL', color: '#3B82F6', icon: Shield }
+            }
+            return { label: 'STAFF', color: '#059669', icon: Shield }
+        }
         return { label: 'UNKNOWN', color: '#6b7280', icon: Info }
     }
 
@@ -192,25 +198,58 @@ export default function KitchenPage() {
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 marginBottom: 'var(--space-6)',
-                background: 'var(--surface)',
-                padding: 'var(--space-4) var(--space-6)',
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: 'var(--shadow-sm)',
-                border: '1px solid var(--border)'
+                background: 'white',
+                padding: '1.25rem 2rem',
+                borderRadius: '24px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.05)',
+                border: '1px solid rgba(var(--primary-rgb), 0.1)',
+                flexWrap: 'wrap',
+                gap: '1rem'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: status === 'SUBSCRIBED' ? '#10B981' : '#EF4444', animation: status === 'SUBSCRIBED' ? 'pulse 2s infinite' : 'none' }} />
-                        <h2 style={{ margin: 0, fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--text)' }}>Kitchen Board</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '50%',
+                            background: status === 'SUBSCRIBED' ? '#10B981' : '#EF4444',
+                            boxShadow: status === 'SUBSCRIBED' ? '0 0 10px #10B981' : 'none',
+                            animation: status === 'SUBSCRIBED' ? 'pulse 2s infinite' : 'none'
+                        }} />
+                        <h2 style={{
+                            margin: 0,
+                            fontSize: 'clamp(1.25rem, 3vw, 1.75rem)',
+                            fontWeight: '800',
+                            color: 'var(--text)',
+                            letterSpacing: '-0.02em'
+                        }}>Kitchen Board</h2>
                     </div>
-                    <Link href="/kitchen/specials">
-                        <Button variant="outline" size="sm" style={{ borderRadius: 'var(--radius-xl)' }}>
-                            <Sparkles size={16} style={{ marginRight: '8px' }} />
-                            Daily Specials
-                        </Button>
-                    </Link>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <Link href="/kitchen/specials">
+                            <Button variant="outline" size="sm" style={{
+                                borderRadius: '12px',
+                                fontWeight: '700',
+                                border: '1px solid rgba(var(--primary-rgb), 0.2)',
+                                background: 'white'
+                            }}>
+                                <Sparkles size={16} style={{ marginRight: '8px', color: 'var(--primary)' }} />
+                                Specials
+                            </Button>
+                        </Link>
+                        <Link href="/admin">
+                            <Button variant="outline" size="sm" style={{
+                                borderRadius: '12px',
+                                fontWeight: '700',
+                                border: '1px solid rgba(var(--primary-rgb), 0.2)',
+                                background: 'white'
+                            }}>
+                                <LayoutDashboard size={16} style={{ marginRight: '8px', color: 'var(--primary)' }} />
+                                Admin
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <Button
                         variant="ghost"
                         size="sm"
@@ -219,11 +258,32 @@ export default function KitchenPage() {
                             audio.play().then(() => setAudioError(false))
                             if ('Notification' in window) Notification.requestPermission()
                         }}
+                        style={{
+                            width: '44px',
+                            height: '44px',
+                            padding: 0,
+                            borderRadius: '50%',
+                            background: 'rgba(var(--primary-rgb), 0.05)',
+                            color: 'var(--primary)'
+                        }}
                     >
-                        <Volume2 size={18} />
+                        <Volume2 size={20} />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => signOut()} style={{ color: 'var(--text-muted)' }}>
-                        <LogOut size={18} style={{ marginRight: '8px' }} />
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => signOut()}
+                        style={{
+                            color: '#64748b',
+                            fontWeight: '700',
+                            gap: '8px',
+                            padding: '0 1.25rem',
+                            height: '44px',
+                            borderRadius: '12px',
+                            background: '#f8fafc'
+                        }}
+                    >
+                        <LogOut size={18} />
                         Exit
                     </Button>
                 </div>
@@ -366,7 +426,11 @@ export default function KitchenPage() {
                                             <span style={{ fontSize: '0.7rem', fontWeight: 800, color: sc.color, letterSpacing: '0.05em' }}>{sc.label}</span>
                                             {sc.pulse && <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: sc.color, animation: 'pulse 1.5s infinite' }} />}
                                         </div>
-                                        <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>{order.table_name}</h3>
+                                        <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>
+                                            {order.notes === 'REGULAR_STAFF_MEAL' ? (
+                                                <span style={{ color: '#3B82F6' }}>{order.user?.name || 'Staff'}<br /><span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Regular Meal Order</span></span>
+                                            ) : order.table_name}
+                                        </h3>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', color: badge.color }}>
                                             <TypeIcon size={14} />
                                             <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>{badge.label}</span>
@@ -392,7 +456,7 @@ export default function KitchenPage() {
                                                 <span>{order.ready_in_minutes} MIN SLOT</span>
                                             </div>
                                         </div>
-                                        <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em' }}>ORDER #{order.id.slice(0, 6).toUpperCase()}</p>
+                                        <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em' }}>ORDER #{order.id.slice(0, 8).toUpperCase()}</p>
                                     </div>
                                 </div>
 
@@ -400,16 +464,26 @@ export default function KitchenPage() {
                                     <div style={{ marginBottom: 'var(--space-4)' }}>
                                         <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>ORDER ITEMS</p>
                                         <div style={{ background: 'var(--background)', borderRadius: 'var(--radius)', padding: 'var(--space-3)' }}>
-                                            {order.items?.map((item: any) => (
-                                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 600, padding: '4px 0', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                                                    <span>{item.menu_item?.name}</span>
-                                                    <span style={{ color: 'var(--primary)' }}>x{item.quantity}</span>
+                                            {order.notes === 'REGULAR_STAFF_MEAL' ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '12px', border: '1px dashed rgba(59, 130, 246, 0.3)' }}>
+                                                    <Utensils size={20} color="#3B82F6" />
+                                                    <div>
+                                                        <div style={{ fontWeight: 800, color: '#3B82F6', fontSize: '1.125rem' }}>Standard Regular Meal</div>
+                                                        <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Fixed staff daily menu</div>
+                                                    </div>
                                                 </div>
-                                            ))}
+                                            ) : (
+                                                order.items?.map((item: any) => (
+                                                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 600, padding: '4px 0', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
+                                                        <span>{item.menu_item?.name}</span>
+                                                        <span style={{ color: 'var(--primary)' }}>x{item.quantity}</span>
+                                                    </div>
+                                                ))
+                                            )}
                                         </div>
                                     </div>
 
-                                    {order.notes && (
+                                    {order.notes && order.notes !== 'REGULAR_STAFF_MEAL' && (
                                         <div style={{
                                             background: '#FEF2F2',
                                             color: '#DC2626',

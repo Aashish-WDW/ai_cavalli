@@ -7,9 +7,11 @@ import { CategoryBadge } from '@/components/ui/CategoryBadge'
 import { MenuItemCard, MenuItem } from '@/components/ui/MenuItemCard'
 import { useCart } from '@/lib/context/CartContext'
 import { useAuth } from '@/lib/auth/context'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Utensils } from 'lucide-react'
 import Link from 'next/link'
 import { Loading } from '@/components/ui/Loading'
+import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
 
 interface MenuPageItem extends MenuItem {
     category_id: string;
@@ -31,6 +33,9 @@ export default function MenuPage() {
     const [searchQuery, setSearchQuery] = useState('')
     const [loading, setLoading] = useState(true)
     const { addToCart } = useCart()
+    const { user } = useAuth()
+    const router = useRouter()
+    const [isOrderingMeal, setIsOrderingMeal] = useState(false)
 
     useEffect(() => {
         async function fetchData() {
@@ -118,17 +123,80 @@ export default function MenuPage() {
         addToCart(item)
     }
 
+    const orderRegularMeal = async () => {
+        if (!user || role !== 'staff') return
+        if (!confirm('Order your regular staff meal?')) return
+
+        setIsOrderingMeal(true)
+        try {
+            const { data: order, error: orderError } = await supabase
+                .from('orders')
+                .insert({
+                    user_id: user.id,
+                    table_name: 'Staff Table',
+                    status: 'pending',
+                    total: 0,
+                    ready_in_minutes: 15,
+                    notes: 'REGULAR_STAFF_MEAL',
+                    num_guests: 1,
+                    location_type: 'indoor'
+                })
+                .select()
+                .single()
+
+            if (orderError) throw orderError
+
+            // Optionally add a dummy item for history
+            await supabase.from('order_items').insert({
+                order_id: order.id,
+                menu_item_id: null, // We'll handle this in kitchen UI
+                quantity: 1,
+                price: 0
+            })
+
+            alert('Regular meal ordered successfully!')
+            router.push('/orders')
+        } catch (err: any) {
+            console.error('Failed to order regular meal:', err)
+            alert('Failed to place order: ' + (err.message || 'Unknown error'))
+        } finally {
+            setIsOrderingMeal(false)
+        }
+    }
+
     if (loading) {
         return <Loading fullScreen message="Preparing the menu..." />
     }
 
     return (
         <div className="container fade-in" style={{ paddingTop: 'var(--space-6)', paddingBottom: 'var(--space-12)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
-                <Link href="/home" style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center' }}>
-                    <ChevronLeft size={32} />
-                </Link>
-                <h1 style={{ margin: 0, fontSize: '2.5rem', fontFamily: 'var(--font-serif)' }}>Menu</h1>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    <Link href="/home" style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center' }}>
+                        <ChevronLeft size={32} />
+                    </Link>
+                    <h1 style={{ margin: 0, fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontFamily: 'var(--font-serif)' }}>Menu</h1>
+                </div>
+
+                {role === 'staff' && (
+                    <Button
+                        onClick={orderRegularMeal}
+                        isLoading={isOrderingMeal}
+                        style={{
+                            borderRadius: '16px',
+                            background: 'white',
+                            color: 'var(--primary)',
+                            border: '2px solid var(--primary)',
+                            fontWeight: '800',
+                            padding: '0 1.5rem',
+                            height: '48px',
+                            boxShadow: '0 4px 12px rgba(var(--primary-rgb), 0.1)'
+                        }}
+                    >
+                        <Utensils size={18} style={{ marginRight: '8px' }} />
+                        Order Regular Meal
+                    </Button>
+                )}
             </div>
 
             <div style={{

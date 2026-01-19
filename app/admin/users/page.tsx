@@ -1,0 +1,709 @@
+'use client'
+
+import { useEffect, useState, useMemo } from 'react'
+import { supabase } from '@/lib/database/supabase'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Loading } from '@/components/ui/Loading'
+import {
+    Users,
+    Search,
+    Plus,
+    Edit2,
+    Trash2,
+    User,
+    Mail,
+    Phone,
+    Shield,
+    ArrowLeft,
+    Check,
+    X,
+    MoreVertical,
+    UserCircle,
+    Key,
+    UserPlus,
+    Filter
+} from 'lucide-react'
+import Link from 'next/link'
+
+interface UserRecord {
+    id: string;
+    phone: string;
+    pin: string;
+    name: string;
+    role: string;
+    parent_name?: string;
+    created_at: string;
+}
+
+type RoleType = 'all' | 'student' | 'staff' | 'kitchen_manager' | 'admin';
+
+export default function UserControlPage() {
+    const [users, setUsers] = useState<UserRecord[]>([])
+    const [loading, setLoading] = useState(true)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [roleFilter, setRoleFilter] = useState<RoleType>('all')
+
+    // Modal states
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [currentUser, setCurrentUser] = useState<UserRecord | null>(null)
+
+    // Form states
+    const [formData, setFormData] = useState({
+        name: '',
+        phone: '',
+        email: '',
+        pin: '123456',
+        role: 'student',
+        parent_name: ''
+    })
+    const [submitting, setSubmitting] = useState(false)
+
+    useEffect(() => {
+        fetchUsers()
+    }, [])
+
+    async function fetchUsers() {
+        setLoading(true)
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+        if (data) setUsers(data)
+        setLoading(false)
+    }
+
+    const filteredUsers = useMemo(() => {
+        return users.filter(u => {
+            const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                u.phone.includes(searchQuery)
+            const matchesRole = roleFilter === 'all' || u.role === roleFilter
+            return matchesSearch && matchesRole
+        })
+    }, [users, searchQuery, roleFilter])
+
+    async function handleAdd(e: React.FormEvent) {
+        e.preventDefault()
+        setSubmitting(true)
+
+        try {
+            // 1. Create Auth User
+            const finalEmail = formData.email || `${formData.phone}@example.com`
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: finalEmail,
+                password: formData.pin,
+                options: { data: { full_name: formData.name } }
+            })
+
+            if (authError) throw authError
+
+            // 2. Insert into public.users
+            const { error: dbError } = await supabase.from('users').insert({
+                id: authData.user?.id,
+                name: formData.name,
+                phone: formData.phone,
+                pin: formData.pin,
+                role: formData.role,
+                parent_name: formData.role === 'student' ? formData.parent_name : null
+            })
+
+            if (dbError) throw dbError
+
+            setIsAddModalOpen(false)
+            resetForm()
+            fetchUsers()
+        } catch (err: any) {
+            alert(`Error adding user: ${err.message}`)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    async function handleEdit(e: React.FormEvent) {
+        e.preventDefault()
+        if (!currentUser) return
+        setSubmitting(true)
+
+        try {
+            const { error } = await supabase
+                .from('users')
+                .update({
+                    name: formData.name,
+                    phone: formData.phone,
+                    role: formData.role,
+                    parent_name: formData.role === 'student' ? formData.parent_name : null
+                })
+                .eq('id', currentUser.id)
+
+            if (error) throw error
+
+            setIsEditModalOpen(false)
+            fetchUsers()
+        } catch (err: any) {
+            alert(`Error updating user: ${err.message}`)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    async function handleDelete(id: string) {
+        if (!confirm('Are you sure you want to delete this user? This will not remove their auth account but will restrict access.')) return
+
+        try {
+            const { error } = await supabase.from('users').delete().eq('id', id)
+            if (error) throw error
+            fetchUsers()
+        } catch (err: any) {
+            alert(`Error deleting user: ${err.message}`)
+        }
+    }
+
+    function resetForm() {
+        setFormData({
+            name: '',
+            phone: '',
+            email: '',
+            pin: '123456',
+            role: 'student',
+            parent_name: ''
+        })
+    }
+
+    function openEdit(user: UserRecord) {
+        setCurrentUser(user)
+        setFormData({
+            name: user.name,
+            phone: user.phone,
+            email: '', // Not stored in DB
+            pin: user.pin,
+            role: user.role,
+            parent_name: user.parent_name || ''
+        })
+        setIsEditModalOpen(true)
+    }
+
+    if (loading) return <Loading fullScreen message="Managing Users..." />
+
+    return (
+        <div style={{
+            minHeight: '100vh',
+            background: 'rgb(248, 249, 250)',
+            padding: 'clamp(1rem, 3vw, 2.5rem)',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
+        }}>
+            {/* Background Pattern */}
+            <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: 'radial-gradient(circle at 20px 20px, rgba(var(--primary-rgb), 0.03) 1px, transparent 0)',
+                backgroundSize: '40px 40px',
+                pointerEvents: 'none',
+                zIndex: 0
+            }} />
+
+            <div style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+                {/* Header */}
+                <div style={{ marginBottom: '3rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                            <Link href="/admin">
+                                <div style={{
+                                    width: '48px',
+                                    height: '48px',
+                                    borderRadius: '50%',
+                                    background: 'white',
+                                    border: '1px solid rgba(var(--primary-rgb), 0.1)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'var(--text)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.3s ease',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                                }}>
+                                    <ArrowLeft size={24} />
+                                </div>
+                            </Link>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                    <div style={{
+                                        background: 'var(--primary)',
+                                        padding: '12px',
+                                        borderRadius: '16px',
+                                        boxShadow: '0 4px 12px rgba(var(--primary-rgb), 0.25)'
+                                    }}>
+                                        <Users size={28} color="white" />
+                                    </div>
+                                    <h1 style={{
+                                        fontSize: 'clamp(2.5rem, 5vw, 3.5rem)',
+                                        fontWeight: '600',
+                                        margin: 0,
+                                        color: 'var(--text)',
+                                        letterSpacing: '-0.01em',
+                                    }}>
+                                        User Control
+                                    </h1>
+                                </div>
+                                <p style={{
+                                    color: 'var(--text-muted)',
+                                    margin: '4px 0 0 0',
+                                    fontSize: 'clamp(0.9rem, 2vw, 1.1rem)',
+                                    fontStyle: 'italic'
+                                }}>
+                                    Manage staff, riders, and administrative access
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => { resetForm(); setIsAddModalOpen(true); }}
+                            style={{
+                                background: 'var(--primary)',
+                                color: 'white',
+                                padding: '12px 28px',
+                                borderRadius: '16px',
+                                height: '54px',
+                                border: 'none',
+                                fontSize: '1rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                boxShadow: '0 8px 16px rgba(var(--primary-rgb), 0.25)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                transition: 'all 0.3s ease'
+                            }}
+                        >
+                            <UserPlus size={20} />
+                            REGISTER NEW USER
+                        </button>
+                    </div>
+                </div>
+
+                {/* Filters & Search */}
+                <div style={{
+                    background: 'white',
+                    padding: '1.75rem',
+                    borderRadius: '24px',
+                    border: '1px solid rgba(var(--primary-rgb), 0.15)',
+                    marginBottom: '2.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1.5rem',
+                    boxShadow: '0 8px 32px rgba(var(--primary-rgb), 0.05)'
+                }}>
+                    <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', flex: 1, minWidth: '300px' }}>
+                            <Search style={{ position: 'absolute', left: '18px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} size={20} />
+                            <input
+                                type="text"
+                                placeholder="Search by name or phone..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '16px 16px 16px 54px',
+                                    borderRadius: '16px',
+                                    border: '2px solid rgba(var(--primary-rgb), 0.1)',
+                                    fontSize: '1rem',
+                                    outline: 'none',
+                                    transition: 'all 0.3s ease',
+                                    background: '#f8fafc'
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
+                            {['all', 'student', 'staff', 'kitchen_manager', 'admin'].map((role) => (
+                                <button
+                                    key={role}
+                                    onClick={() => setRoleFilter(role as RoleType)}
+                                    style={{
+                                        padding: '12px 22px',
+                                        borderRadius: '24px',
+                                        border: '1.5px solid',
+                                        transition: 'all 0.3s ease',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '700',
+                                        background: roleFilter === role ? 'var(--primary)' : 'white',
+                                        borderColor: roleFilter === role ? 'var(--primary)' : 'rgba(var(--primary-rgb), 0.15)',
+                                        color: roleFilter === role ? 'white' : 'var(--text-muted)',
+                                    }}
+                                >
+                                    {role === 'all' ? 'All Users' : role === 'student' ? 'Riders' : role.replace('_', ' ').toUpperCase()}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Users Table Container */}
+                <div style={{
+                    background: 'white',
+                    borderRadius: '28px',
+                    border: '1px solid rgba(var(--primary-rgb), 0.15)',
+                    overflow: 'hidden',
+                    boxShadow: '0 8px 32px rgba(var(--primary-rgb), 0.05)'
+                }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <thead>
+                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                <th style={{ padding: '20px 24px', fontWeight: '700', fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>User</th>
+                                <th style={{ padding: '20px 24px', fontWeight: '700', fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</th>
+                                <th style={{ padding: '20px 24px', fontWeight: '700', fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Role</th>
+                                <th style={{ padding: '20px 24px', fontWeight: '700', fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Details</th>
+                                <th style={{ padding: '20px 24px', fontWeight: '700', fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredUsers.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} style={{ padding: '100px', textAlign: 'center', color: '#64748b' }}>
+                                        <Users size={48} strokeWidth={1} style={{ marginBottom: '16px', opacity: 0.3 }} />
+                                        <p>No users found matching your criteria</p>
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredUsers.map((u) => (
+                                    <tr key={u.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} className="user-row">
+                                        <td style={{ padding: '20px 24px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                                <div style={{
+                                                    width: '44px',
+                                                    height: '44px',
+                                                    borderRadius: '12px',
+                                                    background: 'rgba(var(--primary-rgb), 0.1)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: 'var(--primary)'
+                                                }}>
+                                                    <UserCircle size={24} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontWeight: '700', color: '#1e293b' }}>{u.name}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {u.id.substring(0, 8)}...</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '20px 24px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontSize: '0.9rem' }}>
+                                                <Phone size={14} />
+                                                {u.phone}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '20px 24px' }}>
+                                            <span style={{
+                                                padding: '6px 12px',
+                                                borderRadius: '8px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.03em',
+                                                background: u.role === 'admin' ? '#fef2f2' : u.role === 'student' ? '#f0f9ff' : '#f0fdf4',
+                                                color: u.role === 'admin' ? '#ef4444' : u.role === 'student' ? '#0ea5e9' : '#10b981',
+                                                border: `1px solid ${u.role === 'admin' ? '#fee2e2' : u.role === 'student' ? '#e0f2fe' : '#dcfce7'}`
+                                            }}>
+                                                {u.role === 'student' ? 'Rider' : u.role.replace('_', ' ')}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '20px 24px' }}>
+                                            {u.role === 'student' ? (
+                                                <div style={{ fontSize: '0.85rem' }}>
+                                                    <span style={{ color: '#64748b' }}>Parent: </span>
+                                                    <span style={{ fontWeight: '600' }}>{u.parent_name || 'Not provided'}</span>
+                                                </div>
+                                            ) : (
+                                                <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>N/A</span>
+                                            )}
+                                        </td>
+                                        <td style={{ padding: '20px 24px', textAlign: 'right' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                                                <Button
+                                                    onClick={() => openEdit(u)}
+                                                    variant="ghost"
+                                                    style={{ width: '36px', height: '36px', padding: 0, borderRadius: '8px' }}
+                                                >
+                                                    <Edit2 size={18} color="#64748b" />
+                                                </Button>
+                                                <Button
+                                                    onClick={() => handleDelete(u.id)}
+                                                    variant="ghost"
+                                                    style={{ width: '36px', height: '36px', padding: 0, borderRadius: '8px' }}
+                                                >
+                                                    <Trash2 size={18} color="#ef4444" />
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Modals */}
+            {(isAddModalOpen || isEditModalOpen) && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.4)',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                    padding: '2rem'
+                }}>
+                    <div style={{
+                        background: 'white',
+                        width: '100%',
+                        maxWidth: '550px',
+                        borderRadius: '28px',
+                        padding: 'clamp(1.5rem, 5vw, 3rem)',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                        position: 'relative',
+                        border: '1px solid rgba(var(--primary-rgb), 0.1)',
+                        maxHeight: '90vh',
+                        overflowY: 'auto'
+                    }}>
+                        <button
+                            onClick={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); }}
+                            style={{
+                                position: 'absolute',
+                                right: '28px',
+                                top: '28px',
+                                background: 'white',
+                                border: '1px solid rgba(0,0,0,0.05)',
+                                cursor: 'pointer',
+                                color: 'var(--text-muted)',
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.3s ease',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <div style={{ marginBottom: '2.5rem' }}>
+                            <h2 style={{ fontSize: '2rem', fontWeight: '800', marginBottom: '0.75rem', color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                                {isAddModalOpen ? 'Register New User' : 'Update Access'}
+                            </h2>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '1rem', fontStyle: 'italic' }}>
+                                {isAddModalOpen ? 'Create a secure access account for your team.' : `Modifying settings for ${formData.name}`}
+                            </p>
+                        </div>
+
+                        <form onSubmit={isAddModalOpen ? handleAdd : handleEdit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <ItalianFormField
+                                label="Full Name"
+                                icon={<User size={14} />}
+                                value={formData.name}
+                                onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
+                                placeholder="Enter full name"
+                                required
+                            />
+
+                            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                                <div style={{ flex: 1, minWidth: '200px' }}>
+                                    <ItalianFormField
+                                        label="Phone Number"
+                                        icon={<Phone size={14} />}
+                                        value={formData.phone}
+                                        onChange={(e: any) => setFormData({ ...formData, phone: e.target.value })}
+                                        placeholder="10 digit number"
+                                        required
+                                    />
+                                </div>
+                                <div style={{ flex: 1, minWidth: '200px' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                        <Shield size={14} />
+                                        Role
+                                    </label>
+                                    <select
+                                        value={formData.role}
+                                        onChange={e => setFormData({ ...formData, role: e.target.value })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '16px 18px',
+                                            borderRadius: '14px',
+                                            border: '2px solid rgba(var(--primary-rgb), 0.15)',
+                                            background: 'white',
+                                            fontSize: '1rem',
+                                            outline: 'none',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.style.borderColor = 'var(--primary)'
+                                            e.target.style.boxShadow = '0 0 0 4px rgba(var(--primary-rgb), 0.08)'
+                                        }}
+                                        onBlur={(e) => {
+                                            e.target.style.borderColor = 'rgba(var(--primary-rgb), 0.15)'
+                                            e.target.style.boxShadow = 'none'
+                                        }}
+                                    >
+                                        <option value="student">Rider</option>
+                                        <option value="staff">Staff</option>
+                                        <option value="kitchen_manager">Kitchen Manager</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {isAddModalOpen && (
+                                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                                    <div style={{ flex: 1, minWidth: '200px' }}>
+                                        <ItalianFormField
+                                            label="Email (Optional)"
+                                            icon={<Mail size={14} />}
+                                            value={formData.email}
+                                            onChange={(e: any) => setFormData({ ...formData, email: e.target.value })}
+                                            placeholder="Optional"
+                                        />
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: '200px' }}>
+                                        <ItalianFormField
+                                            label="Auth PIN"
+                                            icon={<Key size={14} />}
+                                            value={formData.pin}
+                                            onChange={(e: any) => setFormData({ ...formData, pin: e.target.value })}
+                                            placeholder="6+ characters"
+                                            required
+                                            minLength={6}
+                                            type="password"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {formData.role === 'student' && (
+                                <ItalianFormField
+                                    label="Parent/Guardian Name"
+                                    icon={<Users size={14} />}
+                                    value={formData.parent_name}
+                                    onChange={(e: any) => setFormData({ ...formData, parent_name: e.target.value })}
+                                    placeholder="Responsible party name"
+                                    required
+                                />
+                            )}
+
+                            <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); }}
+                                    style={{
+                                        flex: 1,
+                                        height: '58px',
+                                        borderRadius: '16px',
+                                        border: '2px solid rgba(var(--primary-rgb), 0.15)',
+                                        background: 'white',
+                                        color: 'var(--text-muted)',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                                >
+                                    CANCEL
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={submitting}
+                                    style={{
+                                        flex: 2,
+                                        height: '58px',
+                                        borderRadius: '16px',
+                                        background: 'var(--primary)',
+                                        color: 'white',
+                                        border: 'none',
+                                        fontWeight: '800',
+                                        fontSize: '1rem',
+                                        cursor: submitting ? 'not-allowed' : 'pointer',
+                                        boxShadow: '0 8px 16px rgba(var(--primary-rgb), 0.25)',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                    onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.transform = 'translateY(-2px)' }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)' }}
+                                >
+                                    {submitting ? 'PROCESSING...' : (isAddModalOpen ? 'CREATE ACCOUNT' : 'SAVE CHANGES')}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            <style>{`
+                .user-row:hover {
+                    background: rgba(var(--primary-rgb), 0.02);
+                }
+                select:focus {
+                    border-color: var(--primary) !important;
+                    box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.08) !important;
+                    outline: none;
+                }
+            `}</style>
+        </div>
+    )
+}
+
+function ItalianFormField({ label, icon, ...props }: { label: React.ReactNode; icon?: React.ReactNode;[x: string]: any; }) {
+    return (
+        <div>
+            <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '12px',
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+            }}>
+                {icon}
+                {label}
+            </label>
+            <input
+                {...props}
+                style={{
+                    width: '100%',
+                    padding: '16px 18px',
+                    borderRadius: '14px',
+                    border: '2px solid rgba(var(--primary-rgb), 0.15)',
+                    fontSize: '1rem',
+                    transition: 'all 0.3s ease',
+                    outline: 'none',
+                    background: 'white',
+                }}
+                onFocus={(e: React.FocusEvent<HTMLInputElement>) => {
+                    e.target.style.borderColor = 'var(--primary)'
+                    e.target.style.boxShadow = '0 0 0 4px rgba(var(--primary-rgb), 0.08)'
+                }}
+                onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                    e.target.style.borderColor = 'rgba(var(--primary-rgb), 0.15)'
+                    e.target.style.boxShadow = 'none'
+                }}
+            />
+        </div>
+    )
+}

@@ -380,6 +380,42 @@ export default function CartPage() {
                                 onChange={e => setNotes(e.target.value)}
                             />
 
+                            {user && (
+                                <div style={{
+                                    padding: '1.25rem',
+                                    background: 'rgba(var(--primary-rgb), 0.05)',
+                                    borderRadius: '16px',
+                                    border: '1px solid rgba(var(--primary-rgb), 0.15)',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '14px',
+                                    marginTop: 'var(--space-2)'
+                                }}>
+                                    <div style={{
+                                        minWidth: '28px',
+                                        height: '28px',
+                                        borderRadius: '50%',
+                                        background: 'var(--primary)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'white',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '900',
+                                        boxShadow: '0 2px 8px rgba(var(--primary-rgb), 0.3)'
+                                    }}>!</div>
+                                    <p style={{
+                                        margin: 0,
+                                        fontSize: '0.9rem',
+                                        color: 'var(--text)',
+                                        fontWeight: '600',
+                                        lineHeight: 1.5
+                                    }}>
+                                        This transaction will be recorded and settled as part of your <span style={{ color: 'var(--primary)' }}>monthly expense account</span>.
+                                    </p>
+                                </div>
+                            )}
+
                             <Button type="submit" isLoading={loading} size="lg" style={{ marginTop: 'var(--space-4)', height: '56px', fontSize: '1.125rem' }}>
                                 Confirm Order
                             </Button>
