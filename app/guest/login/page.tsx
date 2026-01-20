@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { sanitizePhone } from '@/lib/utils/phone'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { UserCircle, Phone, Hash, Users, ChevronRight } from 'lucide-react'
+import { UserCircle, Phone, Hash, Users, ChevronRight, Utensils } from 'lucide-react'
 
 export default function GuestLoginPage() {
     const router = useRouter()
@@ -18,17 +19,25 @@ export default function GuestLoginPage() {
         e.preventDefault()
         setLoading(true)
 
+        const finalPhone = sanitizePhone(phone)
+
+        if (finalPhone.length < 10) {
+            alert('Please enter a valid 10-digit phone number')
+            setLoading(false)
+            return
+        }
+
         // Save to localStorage
-        localStorage.setItem('guest_name', name)
-        localStorage.setItem('guest_phone', phone.replace(/\D/g, ''))
-        localStorage.setItem('guest_table', tableName)
+        localStorage.setItem('guest_name', name.trim())
+        localStorage.setItem('guest_phone', finalPhone)
+        localStorage.setItem('guest_table', tableName.trim())
         localStorage.setItem('guest_num_guests', numGuests)
         localStorage.setItem('is_guest_active', 'true')
 
         // Small delay for effect
         setTimeout(() => {
             router.push('/guest/home')
-        }, 500)
+        }, 800)
     }
 
     return (
@@ -53,24 +62,25 @@ export default function GuestLoginPage() {
             }}>
                 <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
                     <div style={{
-                        width: '64px',
-                        height: '64px',
+                        width: '72px',
+                        height: '72px',
                         background: 'var(--primary)',
-                        borderRadius: '20px',
+                        borderRadius: '24px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        margin: '0 auto 1rem',
+                        margin: '0 auto 1.25rem',
                         transform: 'rotate(-5deg)',
-                        boxShadow: '0 8px 20px rgba(192, 39, 45, 0.2)'
+                        boxShadow: '0 12px 24px rgba(192, 39, 45, 0.3)',
+                        border: '2px solid white'
                     }}>
-                        <UserCircle size={32} color="white" />
+                        <Utensils size={36} color="white" />
                     </div>
-                    <h1 style={{ fontSize: '2rem', color: 'var(--text)', marginBottom: '0.5rem', fontFamily: 'var(--font-serif)' }}>
+                    <h1 style={{ fontSize: '2.4rem', color: 'var(--text)', marginBottom: '0.5rem', fontFamily: 'var(--font-serif)', letterSpacing: '-0.02em' }}>
                         Guest Check-in
                     </h1>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                        Join us for an authentic Italian experience
+                    <p style={{ color: 'var(--text-muted)', fontSize: '1rem', fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                        Ai Cavalli • Authentic Italian
                     </p>
                 </div>
 

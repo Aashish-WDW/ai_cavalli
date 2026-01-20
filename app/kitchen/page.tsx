@@ -78,12 +78,28 @@ export default function KitchenPage() {
             })
         }
 
+        const fetchSingleOrder = async (orderId: string) => {
+            const { data } = await supabase
+                .from('orders')
+                .select(`
+                    *,
+                    user:users(role, name, phone),
+                    items:order_items(
+                        *,
+                        menu_item:menu_items(name)
+                    )
+                `)
+                .eq('id', orderId)
+                .single()
+            return data
+        }
+
         const channel = supabase
             .channel('kitchen-orders')
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'orders' },
-                (payload) => {
+                async (payload) => {
                     if (payload.eventType === 'INSERT') {
                         playSound()
                         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -92,8 +108,31 @@ export default function KitchenPage() {
                                 icon: '/favicon.ico'
                             })
                         }
+                        const newOrder = await fetchSingleOrder(payload.new.id)
+                        if (newOrder && ['pending', 'preparing', 'ready'].includes(newOrder.status)) {
+                            setOrders(prev => [newOrder, ...prev])
+                        }
+                    } else if (payload.eventType === 'UPDATE') {
+                        const updated = await fetchSingleOrder(payload.new.id)
+                        if (updated) {
+                            if (['completed', 'cancelled'].includes(updated.status)) {
+                                setOrders(prev => prev.filter(o => o.id !== updated.id))
+                                setCompletedOrders(prev => [updated, ...prev.slice(0, 19)])
+                            } else {
+                                setOrders(prev => {
+                                    const exists = prev.find(o => o.id === updated.id)
+                                    if (exists) {
+                                        return prev.map(o => o.id === updated.id ? updated : o)
+                                    } else if (['pending', 'preparing', 'ready'].includes(updated.status)) {
+                                        return [updated, ...prev]
+                                    }
+                                    return prev
+                                })
+                            }
+                        }
+                    } else if (payload.eventType === 'DELETE') {
+                        setOrders(prev => prev.filter(o => o.id !== payload.old.id))
                     }
-                    fetchOrders()
                 }
             )
             .subscribe((status) => {

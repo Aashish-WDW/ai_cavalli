@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/context'
 import { supabase } from '@/lib/database/supabase'
+import { sanitizePhone } from '@/lib/utils/phone'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { User, KeyRound, Utensils } from 'lucide-react'
@@ -32,7 +33,7 @@ export default function LoginPage() {
     }
 
     const handleGuest = () => {
-        router.push('/guest/home')
+        router.push('/guest/login')
     }
 
     const handleSignup = () => {
@@ -74,7 +75,8 @@ export default function LoginPage() {
         setLoading(true)
 
         try {
-            const email = `${phone.trim()}@example.com`
+            const cleanPhone = sanitizePhone(phone)
+            const email = `${cleanPhone}@example.com`
 
             // Create auth user
             const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -97,7 +99,7 @@ export default function LoginPage() {
             // Create database record
             const { error: dbError } = await supabase.from('users').insert({
                 id: authData.user.id,
-                phone: phone.trim(),
+                phone: cleanPhone,
                 pin,
                 name,
                 role: loginRole, // Use selected role
@@ -182,11 +184,7 @@ export default function LoginPage() {
                             placeholder="1234567890"
                             value={phone}
                             onChange={(e) => {
-                                const val = e.target.value
-                                const numeric = val.replace(/\D/g, '')
-                                const sanitized = numeric.startsWith('0') ? numeric.slice(1) : numeric
-                                const truncated = sanitized.slice(0, 10)
-                                setPhone(truncated)
+                                setPhone(sanitizePhone(e.target.value))
                             }}
                             required
                             maxLength={10}
@@ -275,11 +273,7 @@ export default function LoginPage() {
                         placeholder="1234567890"
                         value={phone}
                         onChange={(e) => {
-                            const val = e.target.value
-                            const numeric = val.replace(/\D/g, '')
-                            const sanitized = numeric.startsWith('0') ? numeric.slice(1) : numeric
-                            const truncated = sanitized.slice(0, 10)
-                            setPhone(truncated)
+                            setPhone(sanitizePhone(e.target.value))
                         }}
                         required
                         maxLength={10}

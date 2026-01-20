@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/database/supabase'
+import { sanitizePhone } from '@/lib/utils/phone'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loading } from '@/components/ui/Loading'
@@ -89,10 +90,7 @@ export default function UserControlPage() {
         e.preventDefault()
         setSubmitting(true)
 
-        // 1. Sanitize Phone (Declare outside try for catch access)
-        const numeric = formData.phone.replace(/\D/g, '')
-        const sanitizedPhone = numeric.startsWith('0') ? numeric.slice(1) : numeric
-        const phone = sanitizedPhone.slice(0, 10)
+        const phone = sanitizePhone(formData.phone)
 
         try {
             // 2. Create Auth User using a NON-PERSISTING client
@@ -149,9 +147,7 @@ export default function UserControlPage() {
 
         try {
             // Sanitize Phone
-            const numeric = formData.phone.replace(/\D/g, '')
-            const sanitizedPhone = numeric.startsWith('0') ? numeric.slice(1) : numeric
-            const phone = sanitizedPhone.slice(0, 10)
+            const phone = sanitizePhone(formData.phone)
 
             const { error } = await supabase
                 .from('users')

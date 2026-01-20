@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/lib/context/CartContext'
 import { supabase } from '@/lib/database/supabase'
+import { sanitizePhone } from '@/lib/utils/phone'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Trash2, ChevronLeft } from 'lucide-react'
@@ -70,10 +71,18 @@ export default function GuestCartPage() {
     const handleCheckout = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!name || !phone || !tableName) return
+
+        const finalPhone = sanitizePhone(phone)
+
+        if (finalPhone.length < 10) {
+            alert('Please enter a valid 10-digit phone number')
+            return
+        }
+
         setLoading(true)
 
         try {
-            const guestInfo = { name, phone }
+            const guestInfo = { name: name.trim(), phone: finalPhone }
 
             // Create Order
             const { data: order, error: orderError } = await supabase

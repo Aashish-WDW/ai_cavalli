@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/database/supabase'
+import { sanitizePhone } from '@/lib/utils/phone'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
 import { Loading } from '@/components/ui/Loading'
 import Link from 'next/link'
@@ -14,10 +15,20 @@ export default function GuestHomePage() {
     const [activeOrders, setActiveOrders] = useState<any[]>([])
 
     useEffect(() => {
+        let channel: any;
+
         async function init() {
             setLoading(true)
             const name = localStorage.getItem('guest_name')
-            const phone = localStorage.getItem('guest_phone')
+            let phone = localStorage.getItem('guest_phone')
+
+            if (phone) {
+                const finalPhone = sanitizePhone(phone)
+                if (phone !== finalPhone) {
+                    phone = finalPhone
+                    localStorage.setItem('guest_phone', finalPhone)
+                }
+            }
 
             if (name) setGuestName(name)
 
@@ -30,21 +41,47 @@ export default function GuestHomePage() {
 
             if (news) setAnnouncements(news)
 
-            // 2. Fetch active orders by phone if available
+            // 2. Fetch and Subscribe to orders
             if (phone) {
-                const { data: orders } = await supabase
-                    .from('orders')
-                    .select('*')
-                    .filter('guest_info->>phone', 'eq', phone)
-                    .in('status', ['pending', 'preparing', 'ready'])
-                    .order('created_at', { ascending: false })
+                const fetchOrders = async () => {
+                    const { data: orders } = await supabase
+                        .from('orders')
+                        .select('*')
+                        .contains('guest_info', { phone: phone })
+                        .in('status', ['pending', 'preparing', 'ready'])
+                        .order('created_at', { ascending: false })
 
-                if (orders) setActiveOrders(orders)
+                    if (orders) setActiveOrders(orders)
+                }
+
+                await fetchOrders()
+
+                // Subscribe to changes
+                channel = supabase
+                    .channel('guest-home-orders')
+                    .on(
+                        'postgres_changes',
+                        {
+                            event: '*',
+                            schema: 'public',
+                            table: 'orders',
+                            filter: `guest_info->>phone=eq.${phone}`
+                        },
+                        () => {
+                            fetchOrders()
+                        }
+                    )
+                    .subscribe()
             }
 
             setLoading(false)
         }
+
         init()
+
+        return () => {
+            if (channel) supabase.removeChannel(channel)
+        }
     }, [])
 
     if (loading) {

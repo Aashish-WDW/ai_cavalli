@@ -17,7 +17,7 @@ export default function KitchenLayout({
         if (!isLoading) {
             if (!user) {
                 router.push('/login')
-            } else if (role !== 'kitchen_manager' && role !== 'admin') {
+            } else if (role !== 'kitchen_manager' && role !== 'admin' && role !== 'staff') {
                 router.push('/home') // Redirect unauthorized users
             }
         }

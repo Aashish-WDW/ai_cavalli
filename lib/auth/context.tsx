@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/database/supabase'
+import { sanitizePhone } from '@/lib/utils/phone'
 import type { User, Session } from '@supabase/supabase-js'
 
 type UserRole = 'student' | 'staff' | 'kitchen_manager' | 'admin' | 'guest'
@@ -70,10 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const signIn = async (phone: string, pin: string) => {
-        // Sanitize phone input
-        const numeric = phone.replace(/\D/g, '')
-        const sanitizedPhone = numeric.startsWith('0') ? numeric.slice(1) : numeric
-        const cleanPhone = sanitizedPhone.slice(0, 10)
+        const cleanPhone = sanitizePhone(phone)
 
         // Map phone to dummy email
         const email = `${cleanPhone}@example.com`

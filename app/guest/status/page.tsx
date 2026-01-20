@@ -6,6 +6,7 @@ import { ChevronLeft, Utensils } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Suspense, useEffect, useState } from 'react'
 import { supabase } from '@/lib/database/supabase'
+import { sanitizePhone } from '@/lib/utils/phone'
 
 function GuestOrderContent() {
     const searchParams = useSearchParams()
@@ -15,41 +16,58 @@ function GuestOrderContent() {
     const [loading, setLoading] = useState(true)
 
     const fetchStatus = async () => {
-        if (!orderId) {
+        let activeOrderId = orderId
+        const guestPhone = localStorage.getItem('guest_phone')
+
+        // If no Order ID in URL, try to find the latest one for this guest
+        if (!activeOrderId && guestPhone) {
+            const { data: latest } = await supabase
+                .from('orders')
+                .select('id')
+                .contains('guest_info', { phone: guestPhone })
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+
+            if (latest) activeOrderId = latest.id
+        }
+
+        if (!activeOrderId) {
             setLoading(false)
             return
         }
+
         const { data } = await supabase
             .from('orders')
             .select(`
-                id, status, table_name, total, discount_amount, guest_info,
+                id, status, table_name, total, discount_amount, guest_info, num_guests, notes,
                 items:order_items(
-                    id,
-                    quantity,
-                    price,
+                    *,
                     menu_item:menu_items(name)
                 )
             `)
-            .eq('id', orderId)
+            .eq('id', activeOrderId)
             .single()
 
         if (data) setOrder(data)
 
-        // Fetch recent orders for this guest phone
-        const guestPhone = localStorage.getItem('guest_phone')
+        // Fetch recent orders history
         if (guestPhone) {
+            const finalPhone = sanitizePhone(guestPhone)
+            if (guestPhone !== finalPhone) {
+                localStorage.setItem('guest_phone', finalPhone)
+            }
+
             const { data: others } = await supabase
                 .from('orders')
                 .select(`
                     id, status, total, discount_amount, created_at,
                     items:order_items(
-                        id,
-                        quantity,
-                        price,
+                        *,
                         menu_item:menu_items(name)
                     )
                 `)
-                .contains('guest_info', { phone: guestPhone })
+                .contains('guest_info', { phone: finalPhone })
                 .order('created_at', { ascending: false })
                 .limit(10)
 
@@ -61,21 +79,23 @@ function GuestOrderContent() {
 
     useEffect(() => {
         fetchStatus()
+    }, [orderId])
 
-        if (!orderId) return
+    useEffect(() => {
+        const targetId = orderId || order?.id
+        if (!targetId) return
 
         const channel = supabase
-            .channel(`guest-order-${orderId}`)
+            .channel(`guest-order-${targetId}`)
             .on(
                 'postgres_changes',
                 {
                     event: 'UPDATE',
                     schema: 'public',
                     table: 'orders',
-                    filter: `id=eq.${orderId}`
+                    filter: `id=eq.${targetId}`
                 },
                 (payload) => {
-                    console.log('Guest order status updated:', payload)
                     fetchStatus()
                 }
             )
@@ -84,7 +104,7 @@ function GuestOrderContent() {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [orderId])
+    }, [orderId, order?.id])
 
     if (loading && orderId) return <p>Checking order status...</p>
 
