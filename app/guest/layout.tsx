@@ -1,44 +1,37 @@
 'use client'
 
-import { useRouter, usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth/context'
 import { GuestBottomNav } from '@/components/layout/GuestBottomNav'
-import { Loading } from '@/components/ui/Loading'
 
 export default function GuestLayout({
     children,
 }: {
     children: React.ReactNode
 }) {
+    const { user, isLoading } = useAuth()
     const router = useRouter()
-    const pathname = usePathname()
-    const [isAuthorized, setIsAuthorized] = useState(false)
 
     useEffect(() => {
-        // Skip check for the login page itself
-        if (pathname === '/guest/login') {
-            setIsAuthorized(true)
-            return
+        if (!isLoading && !user) {
+            // No authenticated user - redirect to login
+            router.push('/login')
         }
+    }, [user, isLoading, router])
 
-        const guestName = localStorage.getItem('guest_name')
-        const guestPhone = localStorage.getItem('guest_phone')
+    if (isLoading) {
+        return <div className="loading-screen">Loading...</div>
+    }
 
-        if (!guestName || !guestPhone) {
-            router.push('/guest/login')
-        } else {
-            setIsAuthorized(true)
-        }
-    }, [pathname, router])
-
-    if (!isAuthorized) {
-        return <Loading fullScreen message="Checking your reservation..." />
+    if (!user) {
+        return null
     }
 
     return (
         <div style={{ paddingBottom: '80px' }}>
             {children}
-            {pathname !== '/guest/login' && <GuestBottomNav />}
+            <GuestBottomNav />
         </div>
     )
 }

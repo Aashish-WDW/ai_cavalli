@@ -10,7 +10,7 @@ export default function CustomerLayout({
 }: {
     children: React.ReactNode
 }) {
-    const { user, role, isLoading } = useAuth()
+    const { user, isLoading } = useAuth()
     const router = useRouter()
 
     useEffect(() => {
@@ -18,17 +18,26 @@ export default function CustomerLayout({
             if (!user) {
                 // No authenticated user - redirect to login
                 router.push('/login')
-            } else if (role === 'kitchen_manager' || role === 'admin') {
+            } else if (user.role === 'kitchen_manager' || user.role === 'admin') {
                 // Kitchen/admin users should use kitchen portal
                 router.push('/kitchen')
             }
-            // Else: authenticated student/staff can access customer portal
+            // Students, staff, and guests can access customer portal
         }
-    }, [user, role, isLoading, router])
+    }, [user, isLoading, router])
 
-    if (isLoading) {
-        return <div className="loading-screen">Loading...</div>
+    if (!user && isLoading) {
+        return <div className="loading-screen" style={{
+            height: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--background)',
+            color: 'var(--text-muted)'
+        }}>Loading...</div>
     }
+
+    if (!user) return null
 
     return (
         <div style={{ paddingBottom: '80px' }}>

@@ -17,101 +17,83 @@ export default function CartPage() {
     const router = useRouter()
 
     const [loading, setLoading] = useState(false)
-    const [name, setName] = useState('')
-    const [phone, setPhone] = useState('')
+
     const [tableName, setTableName] = useState('')
     const [numGuests, setNumGuests] = useState('1')
     const [locationType, setLocationType] = useState<'indoor' | 'outdoor'>('indoor')
     const [notes, setNotes] = useState('')
 
-    // Load guest info from localStorage on mount
-    useEffect(() => {
-        if (!user) {
-            const savedName = localStorage.getItem('guest_name')
-            const savedPhone = localStorage.getItem('guest_phone')
-            if (savedName) setName(savedName)
-            if (savedPhone) setPhone(savedPhone)
-        }
-    }, [user])
-
-    // Save guest info to localStorage when changed
-    const handleNameChange = (val: string) => {
-        setName(val)
-        if (!user) localStorage.setItem('guest_name', val)
-    }
-
-    const handlePhoneChange = (val: string) => {
-        // Numeric only and max 10 digits
-        const numeric = val.replace(/\D/g, '')
-        const sanitized = numeric.startsWith('0') ? numeric.slice(1) : numeric
-        const truncated = sanitized.slice(0, 10)
-
-        setPhone(truncated)
-        if (!user) localStorage.setItem('guest_phone', truncated)
-    }
 
     const handleCheckout = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!tableName) return
-        if (!user && (!name || !phone)) {
-            alert('Please provide your name and phone number')
-            return
-        }
+
         setLoading(true)
 
         try {
-            const guestInfo = !user ? { name, phone } : null
-
-            // Check if cart contains the virtual regular meal item
+            // Check for virtual items
             const hasRegularMeal = items.some(item => item.itemId === 'REGULAR_MEAL_VIRTUAL')
             const finalNotes = hasRegularMeal ? 'REGULAR_STAFF_MEAL' : notes
 
-            // Create Order
-            const { data: order, error: orderError } = await supabase
-                .from('orders')
-                .insert({
-                    user_id: user?.id || null,
-                    guest_info: guestInfo,
-                    table_name: tableName,
-                    location_type: locationType,
-                    num_guests: parseInt(numGuests) || 1,
-                    status: 'pending',
-                    total: total,
-                    notes: finalNotes
+            // 1. Manage Guest Session if applicable
+            let sessionId = null
+
+            // Get session token for secure API calls
+            const { data: { session: supabaseSession } } = await supabase.auth.getSession()
+            const token = supabaseSession?.access_token
+
+            if (user?.role === 'guest') {
+                // Get session from localStorage (set during guest login) or fetch from API
+                const storedSession = localStorage.getItem('guest_session')
+                if (storedSession) {
+                    const parsedSession = JSON.parse(storedSession)
+                    sessionId = parsedSession.id
+                } else {
+                    // Fallback: fetch active session by user ID
+                    const sessionResp = await fetch(`/api/sessions/active?userId=${user.id}`)
+                    const sessionData = await sessionResp.json()
+                    if (sessionData.success && sessionData.session) {
+                        sessionId = sessionData.session.id
+                        localStorage.setItem('guest_session', JSON.stringify(sessionData.session))
+                    } else {
+                        throw new Error('No active dining session found. Please sign in again.')
+                    }
+                }
+            }
+
+            // 2. Call Secure Order API
+            const orderResponse = await fetch('/api/orders/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    userId: user?.id,
+                    phone: user?.phone,
+                    items: items.filter(item => item.itemId !== 'REGULAR_MEAL_VIRTUAL'),
+                    tableName,
+                    numGuests: parseInt(numGuests) || 1,
+                    locationType,
+                    notes: finalNotes,
+                    sessionId
                 })
-                .select()
-                .single()
+            })
 
-            if (orderError) throw orderError
+            const orderData = await orderResponse.json()
 
-            // Create Order Items (filter out virtual regular meal item)
-            const orderItems = items
-                .filter(item => item.itemId !== 'REGULAR_MEAL_VIRTUAL')
-                .map(item => ({
-                    order_id: order.id,
-                    menu_item_id: item.itemId,
-                    quantity: item.quantity,
-                    price: item.price
-                }))
-
-            // Only insert order items if there are any (regular meal might be the only item)
-            if (orderItems.length > 0) {
-                const { error: itemsError } = await supabase
-                    .from('order_items')
-                    .insert(orderItems)
-
-                if (itemsError) throw itemsError
+            if (!orderData.success) {
+                throw new Error(orderData.error || 'Failed to place order')
             }
 
+            // Success!
             clearCart()
-            if (!user) {
-                router.push(`/orders?orderId=${order.id}`)
-            } else {
-                router.push('/orders')
-            }
+
+            // Redirect
+            router.push('/orders')
         } catch (err: any) {
             console.error('Order placement error:', err)
-            alert(`Failed to place order: ${err.message || 'Unknown error'}`)
+            alert(`Failed to place order: ${err.message || "Unknown error"}`)
         } finally {
             setLoading(false)
         }
@@ -283,27 +265,6 @@ export default function CartPage() {
                         </div>
 
                         <form onSubmit={handleCheckout} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                            {!user && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-4)', background: 'rgba(var(--secondary-rgb), 0.05)', borderRadius: 'var(--radius)', border: '1px dashed var(--secondary)' }}>
-                                    <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--secondary)', marginBottom: '-0.5rem' }}>GUEST DETAILS</p>
-                                    <Input
-                                        label="Full Name"
-                                        placeholder="Your name"
-                                        required
-                                        value={name}
-                                        onChange={e => handleNameChange(e.target.value)}
-                                    />
-                                    <Input
-                                        label="Phone Number"
-                                        placeholder="For order updates"
-                                        type="tel"
-                                        required
-                                        value={phone}
-                                        onChange={e => handlePhoneChange(e.target.value)}
-                                        maxLength={10}
-                                    />
-                                </div>
-                            )}
                             <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-2)' }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontWeight: 600 }}>
                                     <input
@@ -400,3 +361,5 @@ export default function CartPage() {
         </div>
     )
 }
+
+

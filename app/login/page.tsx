@@ -1,57 +1,118 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/context'
-import { supabase } from '@/lib/database/supabase'
-import { sanitizePhone } from '@/lib/utils/phone'
 import { Button } from '@/components/ui/button'
-import { User, KeyRound, Utensils, ArrowLeft, ShieldCheck, ClipboardCheck } from 'lucide-react'
+import { User, KeyRound, Utensils, ArrowLeft, ShieldCheck, Phone, Users, Hash } from 'lucide-react'
 import styles from './page.module.css'
 
 export default function LoginPage() {
-    const [view, setView] = useState<'select' | 'login' | 'signup' | 'reset-pin'>('select')
-    const [loginRole, setLoginRole] = useState<'student' | 'staff'>('student')
+    const [view, setView] = useState<'select' | 'login'>('select')
+    const [loginRole, setLoginRole] = useState<'student' | 'staff' | 'guest'>('student')
 
+    // Guest fields
+    const [guestName, setGuestName] = useState('')
+    const [guestPhone, setGuestPhone] = useState('')
+    const [tableName, setTableName] = useState('')
+    const [numGuests, setNumGuests] = useState('1')
+
+    // Staff/Rider fields
     const [phone, setPhone] = useState('')
     const [pin, setPin] = useState('')
+
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
     const { signIn } = useAuth()
     const router = useRouter()
 
-    const handleRoleSelect = (role: 'student' | 'staff') => {
+    const handleRoleSelect = (role: 'student' | 'staff' | 'guest') => {
         setLoginRole(role)
         setView('login')
         setError('')
+        // Reset all fields
+        setGuestName('')
+        setGuestPhone('')
+        setTableName('')
+        setNumGuests('1')
         setPhone('')
         setPin('')
     }
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleGuestLogin = async (e: React.FormEvent) => {
         e.preventDefault()
         setError('')
         setLoading(true)
 
         try {
-            const { error: authError } = await signIn(phone, pin)
-            if (authError) {
-                console.error('Login error:', authError)
-                setError(authError.message || 'Invalid credentials')
+            const response = await fetch('/api/auth/guest-login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: guestName.trim(),
+                    phone: guestPhone,
+                    tableName: tableName.trim(),
+                    numGuests: numGuests
+                })
+            })
+
+            const data = await response.json()
+
+            if (data.success) {
+                // Store session info for cart and orders
+                localStorage.setItem('user', JSON.stringify(data.user))
+                localStorage.setItem('guest_session', JSON.stringify(data.session))
+                localStorage.setItem('is_guest_active', 'true')
+
+                signIn(data.user)
+                window.location.href = '/home'
             } else {
-                // Redirect based on role
-                if (loginRole === 'staff') {
-                    router.push('/kitchen')
-                } else {
-                    router.push('/home')
-                }
+                setError(data.error || 'Login failed. Please try again.')
             }
         } catch (err) {
-            setError('An unexpected error occurred')
+            setError('Network error. Please try again.')
         } finally {
             setLoading(false)
         }
+    }
+
+    const handleLoginPIN = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
+
+        try {
+            const response = await fetch('/api/auth/login-pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, pin })
+            })
+
+            const data = await response.json()
+
+            if (data.success) {
+                localStorage.setItem('user', JSON.stringify(data.user))
+                signIn(data.user)
+
+                if (data.user.role === 'kitchen_manager' || data.user.role === 'admin' || data.user.role === 'staff') {
+                    window.location.href = '/kitchen'
+                } else {
+                    window.location.href = '/home'
+                }
+            } else {
+                setError(data.error || 'Invalid phone or PIN')
+            }
+        } catch (err) {
+            setError('Network error. Please try again.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleBack = () => {
+        setView('select')
+        setError('')
     }
 
     return (
@@ -68,11 +129,11 @@ export default function LoginPage() {
                         </header>
 
                         <div className={styles.roleGrid}>
-                            <button className={styles.premiumCard} onClick={() => router.push('/guest/login')}>
+                            <button className={styles.premiumCard} onClick={() => handleRoleSelect('guest')}>
                                 <div className={styles.iconCircle}><Utensils size={24} /></div>
                                 <div className={styles.cardText}>
                                     <h3>Guest Entry</h3>
-                                    <p>Continue to the culinary experience</p>
+                                    <p>Start your dining experience</p>
                                 </div>
                             </button>
 
@@ -107,62 +168,121 @@ export default function LoginPage() {
 
                 {view === 'login' && (
                     <div className={`${styles.authCard} animate-slide-up`}>
-                        <button onClick={() => setView('select')} className={styles.backArrow}>
+                        <button onClick={handleBack} className={styles.backArrow}>
                             <ArrowLeft size={20} />
                         </button>
 
                         <div className={styles.cardHeader}>
                             <h2 className={styles.cardTitle}>
-                                {loginRole === 'staff' ? 'Staff Verification' : 'Rider Identity'}
+                                {loginRole === 'guest' ? 'Guest Check-in' : loginRole === 'staff' ? 'Staff Verification' : 'Rider Identity'}
                             </h2>
-                            <p className={styles.cardSubtitle}>Enter secure credentials</p>
+                            <p className={styles.cardSubtitle}>
+                                {loginRole === 'guest'
+                                    ? 'Enter your details to start dining'
+                                    : 'Enter your credentials'}
+                            </p>
                         </div>
 
-                        <form className={styles.premiumForm} onSubmit={handleSubmit}>
-                            <div className={styles.inputGroup}>
-                                <label>PHONE NUMBER</label>
-                                <input
-                                    type="tel"
-                                    placeholder="000 000 0000"
-                                    value={phone}
-                                    onChange={(e) => setPhone(sanitizePhone(e.target.value))}
-                                    required
-                                    maxLength={10}
-                                />
-                            </div>
+                        {loginRole === 'guest' ? (
+                            <form className={styles.premiumForm} onSubmit={handleGuestLogin}>
+                                <div className={styles.inputGroup}>
+                                    <label>YOUR NAME</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter your name"
+                                        value={guestName}
+                                        onChange={(e) => setGuestName(e.target.value.slice(0, 20))}
+                                        maxLength={20}
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className={styles.inputGroup}>
+                                    <label>PHONE NUMBER</label>
+                                    <input
+                                        type="tel"
+                                        placeholder="0123456789"
+                                        value={guestPhone}
+                                        onChange={(e) => setGuestPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                        required
+                                    />
+                                </div>
 
-                            <div className={styles.inputGroup}>
-                                <label>ACCESS PIN</label>
-                                <input
-                                    type="password"
-                                    placeholder="••••••"
-                                    maxLength={6}
-                                    value={pin}
-                                    onChange={(e) => {
-                                        const val = e.target.value.replace(/\D/g, '')
-                                        setPin(val.slice(0, 6))
-                                    }}
-                                    required
-                                    minLength={6}
-                                />
-                            </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                                    <div className={styles.inputGroup} style={{ marginBottom: 0 }}>
+                                        <label>TABLE NO</label>
+                                        <input
+                                            type="text"
+                                            placeholder="T1, T2..."
+                                            value={tableName}
+                                            onChange={(e) => setTableName(e.target.value.slice(0, 40))}
+                                            maxLength={40}
+                                            required
+                                        />
+                                    </div>
+                                    <div className={styles.inputGroup} style={{ marginBottom: 0 }}>
+                                        <label>GUESTS</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="20"
+                                            value={numGuests}
+                                            onChange={(e) => setNumGuests(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                </div>
 
-                            {error && <div className={styles.errorBanner}>{error}</div>}
+                                {error && <div className={styles.errorBanner}>{error}</div>}
 
-                            <Button
-                                type="submit"
-                                className={styles.actionButton}
-                                isLoading={loading}
-                            >
-                                AUTHORIZE ENTRY
-                            </Button>
+                                <Button
+                                    type="submit"
+                                    className={styles.actionButton}
+                                    isLoading={loading}
+                                    disabled={!guestName.trim() || guestPhone.length < 10 || !tableName.trim()}
+                                >
+                                    <Utensils size={18} style={{ marginRight: '8px' }} />
+                                    START DINING
+                                </Button>
+                            </form>
+                        ) : (
+                            <form className={styles.premiumForm} onSubmit={handleLoginPIN}>
+                                <div className={styles.inputGroup}>
+                                    <label>PHONE NUMBER</label>
+                                    <input
+                                        type="tel"
+                                        placeholder="0123456789"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className={styles.inputGroup}>
+                                    <label>ACCESS PIN</label>
+                                    <input
+                                        type="password"
+                                        placeholder="000000"
+                                        value={pin}
+                                        onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                        required
+                                        maxLength={6}
+                                    />
+                                </div>
 
-                            <div className={styles.formFooter}>
-                                <button type="button" onClick={() => alert('PIN reset feature - check implementation_plan.md')}>Forgot PIN?</button>
-                                <span className={styles.dot} />
-                                <button type="button" onClick={() => alert('Signup feature - check implementation_plan.md')}>Request Access</button>
-                            </div>
-                        </form>
+                                {error && <div className={styles.errorBanner}>{error}</div>}
+
+                                <Button
+                                    type="submit"
+                                    className={styles.actionButton}
+                                    isLoading={loading}
+                                    disabled={phone.length < 10 || pin.length < 6}
+                                >
+                                    <KeyRound size={18} style={{ marginRight: '8px' }} />
+                                    LOGIN WITH PIN
+                                </Button>
+                            </form>
+                        )}
                     </div>
                 )}
             </div>

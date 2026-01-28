@@ -31,6 +31,7 @@ import Link from 'next/link'
 interface UserRecord {
     id: string;
     phone: string;
+    email: string;
     pin: string;
     name: string;
     role: string;
@@ -79,8 +80,10 @@ export default function UserControlPage() {
 
     const filteredUsers = useMemo(() => {
         return users.filter(u => {
-            const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                u.phone.includes(searchQuery)
+            const matchesSearch =
+                u.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                u.phone?.includes(searchQuery)
             const matchesRole = roleFilter === 'all' || u.role === roleFilter
             return matchesSearch && matchesRole
         })
@@ -91,50 +94,54 @@ export default function UserControlPage() {
         setSubmitting(true)
 
         const phone = sanitizePhone(formData.phone)
+        let email = formData.email?.trim()
+
+        // Use dummy email if not provided for staff/riders
+        if (!email && (formData.role === 'staff' || formData.role === 'student')) {
+            email = `${phone}@aicavalli.com`
+        }
+
+        const isPhoneRequired = formData.role === 'staff' || formData.role === 'student'
+        if (isPhoneRequired && phone.length < 10) {
+            alert("Valid 10-digit Phone number is required for Staff and Riders.")
+            setSubmitting(false)
+            return
+        }
+
+        if (!email) {
+            alert("Email info is required.")
+            setSubmitting(false)
+            return
+        }
 
         try {
-            // 2. Create Auth User using a NON-PERSISTING client
-            // This prevents Supabase from logging out the Admin and logging in as the new user.
-            const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
-                auth: { persistSession: false }
+            const { data: { session } } = await supabase.auth.getSession()
+            const token = session?.access_token
+
+            const response = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    action: 'create',
+                    userData: {
+                        ...formData,
+                        phone,
+                        email
+                    }
+                })
             })
 
-            const finalEmail = formData.email || `${phone}@example.com`
-            const { data: authData, error: authError } = await tempClient.auth.signUp({
-                email: finalEmail,
-                password: formData.pin,
-                options: { data: { full_name: formData.name } }
-            })
-
-            if (authError) throw authError
-
-            // 3. Insert into public.users
-            const { error: dbError } = await supabase.from('users').insert({
-                id: authData.user?.id,
-                name: formData.name,
-                phone: phone,
-                pin: formData.pin,
-                role: formData.role,
-                parent_name: formData.role === 'student' ? formData.parent_name : null
-            })
-
-            if (dbError) throw dbError
+            const data = await response.json()
+            if (!data.success) throw new Error(data.error)
 
             setIsAddModalOpen(false)
             resetForm()
             fetchUsers()
         } catch (err: any) {
-            if (err.message?.includes('User already registered') || err.message?.includes('already exists')) {
-                // Check if they exist in public.users
-                const { data: existing } = await supabase.from('users').select('id').eq('phone', phone).single()
-                if (!existing) {
-                    alert(`CONFLICT: A "Ghost User" was detected. \n\nThis phone number (${phone}) is registered in the system's Auth table but was deleted from this portal. \n\nTo fix this: \n1. Go to Supabase Dashboard > Authentication. \n2. Find and delete the user with email: ${phone}@example.com \n3. Try again here.`)
-                } else {
-                    alert(`Error: This phone number is already registered to ${formData.name || 'another user'}.`)
-                }
-            } else {
-                alert(`Error adding user: ${err.message}`)
-            }
+            alert(`Error adding user: ${err.message}`)
         } finally {
             setSubmitting(false)
         }
@@ -145,21 +152,42 @@ export default function UserControlPage() {
         if (!currentUser) return
         setSubmitting(true)
 
+        const phone = sanitizePhone(formData.phone)
+        let email = formData.email?.trim()
+
+        if (!email && (formData.role === 'staff' || formData.role === 'student')) {
+            email = `${phone}@aicavalli.com`
+        }
+
+        if ((formData.role === 'staff' || formData.role === 'student') && phone.length < 10) {
+            alert("Valid 10-digit Phone number is required.")
+            setSubmitting(false)
+            return
+        }
+
         try {
-            // Sanitize Phone
-            const phone = sanitizePhone(formData.phone)
+            const { data: { session } } = await supabase.auth.getSession()
+            const token = session?.access_token
 
-            const { error } = await supabase
-                .from('users')
-                .update({
-                    name: formData.name,
-                    phone: phone,
-                    role: formData.role,
-                    parent_name: formData.role === 'student' ? formData.parent_name : null
+            const response = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    action: 'update',
+                    userData: {
+                        id: currentUser.id,
+                        ...formData,
+                        phone,
+                        email
+                    }
                 })
-                .eq('id', currentUser.id)
+            })
 
-            if (error) throw error
+            const data = await response.json()
+            if (!data.success) throw new Error(data.error)
 
             setIsEditModalOpen(false)
             fetchUsers()
@@ -171,11 +199,26 @@ export default function UserControlPage() {
     }
 
     async function handleDelete(id: string) {
-        if (!confirm('CRITICAL: Delete User?\n\nThis will remove them from the database, but their System Auth account will remain (Supabase security policy).\n\nTo reuse this phone number later, you MUST also manually delete them from the Supabase Dashboard (Authentication section). \n\nProceed with Portal Deletion?')) return
+        if (!confirm('STRICT DELETE: This will remove the user from BOTH public profiles and Supabase Auth. \n\nProceed?')) return
 
         try {
-            const { error } = await supabase.from('users').delete().eq('id', id)
-            if (error) throw error
+            const { data: { session } } = await supabase.auth.getSession()
+            const token = session?.access_token
+
+            const response = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    action: 'delete',
+                    userData: { id }
+                })
+            })
+
+            const data = await response.json()
+            if (!data.success) throw new Error(data.error)
             fetchUsers()
         } catch (err: any) {
             alert(`Error deleting user: ${err.message}`)
@@ -197,8 +240,8 @@ export default function UserControlPage() {
         setCurrentUser(user)
         setFormData({
             name: user.name,
-            phone: user.phone,
-            email: '', // Not stored in DB
+            phone: user.phone || '',
+            email: user.email || '',
             pin: user.pin,
             role: user.role,
             parent_name: user.parent_name || ''
@@ -341,7 +384,7 @@ export default function UserControlPage() {
                         </div>
 
                         <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
-                            {['all', 'student', 'staff', 'kitchen_manager', 'admin'].map((role) => (
+                            {['all', 'student', 'staff', 'kitchen_manager', 'admin', 'guest'].map((role) => (
                                 <button
                                     key={role}
                                     onClick={() => setRoleFilter(role as RoleType)}
@@ -359,7 +402,7 @@ export default function UserControlPage() {
                                         color: roleFilter === role ? 'white' : 'var(--text-muted)',
                                     }}
                                 >
-                                    {role === 'all' ? 'All Users' : role === 'student' ? 'Riders' : role.replace('_', ' ').toUpperCase()}
+                                    {role === 'all' ? 'All Users' : role === 'student' ? 'Riders' : role === 'guest' ? 'Guests' : role.replace('_', ' ').toUpperCase()}
                                 </button>
                             ))}
                         </div>
@@ -411,14 +454,14 @@ export default function UserControlPage() {
                                                 </div>
                                                 <div>
                                                     <div style={{ fontWeight: '700', color: '#1e293b' }}>{u.name}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {u.id.substring(0, 8)}...</div>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>{u.email}</div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td style={{ padding: '20px 24px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontSize: '0.9rem' }}>
                                                 <Phone size={14} />
-                                                {u.phone}
+                                                {u.phone || 'N/A'}
                                             </div>
                                         </td>
                                         <td style={{ padding: '20px 24px' }}>
@@ -429,11 +472,11 @@ export default function UserControlPage() {
                                                 fontWeight: '800',
                                                 textTransform: 'uppercase',
                                                 letterSpacing: '0.03em',
-                                                background: u.role === 'admin' ? '#fef2f2' : u.role === 'student' ? '#f0f9ff' : '#f0fdf4',
-                                                color: u.role === 'admin' ? '#ef4444' : u.role === 'student' ? '#0ea5e9' : '#10b981',
-                                                border: `1px solid ${u.role === 'admin' ? '#fee2e2' : u.role === 'student' ? '#e0f2fe' : '#dcfce7'}`
+                                                background: u.role === 'admin' ? '#fef2f2' : u.role === 'student' ? '#f0f9ff' : u.role === 'guest' ? '#f5f3ff' : '#f0fdf4',
+                                                color: u.role === 'admin' ? '#ef4444' : u.role === 'student' ? '#0ea5e9' : u.role === 'guest' ? '#8b5cf6' : '#10b981',
+                                                border: `1px solid ${u.role === 'admin' ? '#fee2e2' : u.role === 'student' ? '#e0f2fe' : u.role === 'guest' ? '#ede9fe' : '#dcfce7'}`
                                             }}>
-                                                {u.role === 'student' ? 'Rider' : u.role.replace('_', ' ')}
+                                                {u.role === 'student' ? 'Rider' : u.role.replace('_', ' ').toUpperCase()}
                                             </span>
                                         </td>
                                         <td style={{ padding: '20px 24px' }}>
@@ -545,16 +588,24 @@ export default function UserControlPage() {
                             />
 
                             <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-                                <div style={{ flex: 1, minWidth: '200px' }}>
-                                    <ItalianFormField
-                                        label="Phone Number"
-                                        icon={<Phone size={14} />}
-                                        value={formData.phone}
-                                        onChange={(e: any) => setFormData({ ...formData, phone: e.target.value })}
-                                        placeholder="10 digit number"
-                                        required
-                                    />
-                                </div>
+                                {!(formData.role === 'staff' || formData.role === 'student') ? (
+                                    <div style={{ flex: 1, minWidth: '200px' }}>
+                                        <ItalianFormField
+                                            label="Email Address"
+                                            icon={<Mail size={14} />}
+                                            value={formData.email}
+                                            onChange={(e: any) => setFormData({ ...formData, email: e.target.value })}
+                                            placeholder="user@example.com (Optional)"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', opacity: 0.6 }}>
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                            <Mail size={14} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                                            Email linked to Phone automatically
+                                        </div>
+                                    </div>
+                                )}
                                 <div style={{ flex: 1, minWidth: '200px' }}>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                                         <Shield size={14} />
@@ -594,11 +645,12 @@ export default function UserControlPage() {
                                 <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
                                     <div style={{ flex: 1, minWidth: '200px' }}>
                                         <ItalianFormField
-                                            label="Email (Optional)"
-                                            icon={<Mail size={14} />}
-                                            value={formData.email}
-                                            onChange={(e: any) => setFormData({ ...formData, email: e.target.value })}
-                                            placeholder="Optional"
+                                            label={formData.role === 'staff' || formData.role === 'student' ? "Phone Number" : "Phone (Optional)"}
+                                            icon={<Phone size={14} />}
+                                            value={formData.phone}
+                                            onChange={(e: any) => setFormData({ ...formData, phone: e.target.value })}
+                                            placeholder={formData.role === 'staff' || formData.role === 'student' ? "10 digit number" : "Optional (10 digits)"}
+                                            required={formData.role === 'staff' || formData.role === 'student'}
                                         />
                                     </div>
                                     <div style={{ flex: 1, minWidth: '200px' }}>

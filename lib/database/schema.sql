@@ -147,20 +147,19 @@ create policy "Staff manage announcements" on public.announcements for all
     )
   );
 
--- Orders Policies
+-- Note: Guests viewing orders now requires them to be authenticated via Magic Link/OTP.
+-- We restrict access to the owner (auth.uid() = user_id) or staff.
+-- Public read is disabled to prevent data scraping.
+
 create policy "Users can view own orders" on public.orders for select
-  using (auth.uid() = user_id);
+  using (auth.uid() = user_id OR exists (
+    select 1 from public.users 
+    where id = auth.uid() 
+    and role in ('kitchen_manager', 'admin', 'staff')
+  ));
 
 create policy "Users can insert own orders" on public.orders for insert
   with check (auth.uid() = user_id);
-
-create policy "Guests can insert orders" on public.orders for insert
-  with check (user_id is null);
--- Note: Guests viewing orders is tricky without auth. 
--- For now, we rely on the UUID returned during creation to fetch status (public read with filter if strictly needed, but insecure)
--- OR we leave public read for orders disabled and use an Edge Function for guest status.
--- For this prototype, we'll allow public read on ORDERS so Guests can track by ID (security tradeoff acknowledged)
-create policy "Public view orders" on public.orders for select using (true);
 
 -- Kitchen/Admin Full Access
 create policy "Staff View All Orders" on public.orders for select
@@ -197,7 +196,11 @@ create policy "Users can view own order items" on public.order_items for select
     exists (
       select 1 from public.orders
       where orders.id = order_items.order_id
-      and orders.user_id = auth.uid()
+      and (orders.user_id = auth.uid() OR exists (
+        select 1 from public.users 
+        where id = auth.uid() 
+        and role in ('kitchen_manager', 'admin', 'staff')
+      ))
     )
   );
 
@@ -207,17 +210,6 @@ create policy "Users can insert own order items" on public.order_items for inser
       select 1 from public.orders
       where orders.id = order_items.order_id
       and orders.user_id = auth.uid()
-    )
-  );
-
-create policy "Public view order items" on public.order_items for select using (true);
-
-create policy "Guests can insert order items" on public.order_items for insert
-  with check (
-    exists (
-      select 1 from public.orders
-      where orders.id = order_items.order_id
-      and orders.user_id is null
     )
   );
 

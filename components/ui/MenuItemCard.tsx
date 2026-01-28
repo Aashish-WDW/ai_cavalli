@@ -26,9 +26,11 @@ export function MenuItemCard({ item, onAdd }: MenuItemCardProps) {
         <div className={`${styles.card} fade-in`}>
             <div className={styles.imageContainer}>
                 {item.image_url ? (
-                    <div
+                    <img
+                        src={item.image_url}
+                        alt={item.name}
                         className={styles.image}
-                        style={{ backgroundImage: `url(${item.image_url})` }}
+                        loading="lazy"
                     />
                 ) : (
                     <div className={styles.placeholderImage} />

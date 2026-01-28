@@ -5,12 +5,16 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/database/supabase'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
 import { Loading } from '@/components/ui/Loading'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Receipt, Clock, ArrowRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/lib/auth/context'
 
 export default function CustomerHomePage() {
     const router = useRouter()
+    const { user } = useAuth()
     const [announcements, setAnnouncements] = useState<any[]>([])
-    const [loading, setLoading] = useState(true)
+    const [loadingAnnouncements, setLoadingAnnouncements] = useState(true)
+    const [activeSession, setActiveSession] = useState<any>(null)
 
     // Design Tokens
     const ITALIAN_RED = '#A91E22';
@@ -26,14 +30,28 @@ export default function CustomerHomePage() {
                 .order('created_at', { ascending: false })
 
             if (data) setAnnouncements(data)
-            setLoading(false)
+            setLoadingAnnouncements(false)
         }
-        fetchNews()
-    }, [])
+        async function fetchActiveSession() {
+            if (user?.role === 'guest') {
+                try {
+                    const { data: { session: currentSession } } = await supabase.auth.getSession()
+                    const token = currentSession?.access_token
 
-    if (loading) {
-        return <Loading fullScreen message="Ai Cavalli is preparing your experience..." />
-    }
+                    const response = await fetch(`/api/sessions/active?email=${user.email}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    })
+                    const data = await response.json()
+                    if (data.success) setActiveSession(data.session)
+                } catch (e) { console.error(e) }
+            }
+        }
+
+        fetchNews()
+        fetchActiveSession()
+    }, [user?.id, user?.email])
 
     return (
         <div style={{ background: CRISP_WHITE, color: DEEP_BLACK, minHeight: '100vh' }} className="fade-in">
@@ -53,6 +71,8 @@ export default function CustomerHomePage() {
                     muted
                     loop
                     playsInline
+                    preload="auto"
+                    poster="https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2000"
                     style={{
                         position: 'absolute',
                         width: '100%',
@@ -63,7 +83,6 @@ export default function CustomerHomePage() {
                     }}
                 >
                     <source src="/home.mp4" type="video/mp4" />
-                    <img src="https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2000" alt="Ai Cavalli" />
                 </video>
 
                 {/* Depth Layering */}
@@ -132,7 +151,56 @@ export default function CustomerHomePage() {
             </header>
 
             {/* 2. News Section (Il Giornale) */}
-            <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '100px 24px' }}>
+            <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '100px 24px' }} id="journal">
+                {user?.role === 'guest' && activeSession && (
+                    <div className="hover-lift" style={{
+                        marginBottom: '80px',
+                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                        borderRadius: '24px',
+                        padding: '40px',
+                        color: 'white',
+                        boxShadow: '0 20px 40px rgba(16, 185, 129, 0.2)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '24px',
+                        position: 'relative',
+                        overflow: 'hidden'
+                    }}>
+                        {/* Decorative Pattern */}
+                        <div style={{ position: 'absolute', right: '-20px', bottom: '-20px', opacity: 0.1 }}>
+                            <Receipt size={200} />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                                    <Clock size={20} />
+                                    <span style={{ fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: '0.875rem' }}>Active Dining Session</span>
+                                </div>
+                                <h3 style={{ margin: 0, fontSize: '2.5rem', fontFamily: 'var(--font-serif)', fontWeight: 800 }}>
+                                    ₹{activeSession.total_amount?.toFixed(2) || '0.00'}
+                                </h3>
+                                <p style={{ margin: 0, opacity: 0.9, fontSize: '1.1rem' }}>
+                                    {activeSession.orderCount} Orders placed • Table {activeSession.table_name}
+                                </p>
+                            </div>
+                            <Button
+                                onClick={() => router.push('/orders')}
+                                style={{
+                                    background: 'white',
+                                    color: '#059669',
+                                    fontWeight: 900,
+                                    padding: '1.5rem 2.5rem',
+                                    height: 'auto',
+                                    borderRadius: '16px',
+                                    fontSize: '1rem'
+                                }}
+                            >
+                                VIEW STATUS <ArrowRight size={18} style={{ marginLeft: '8px' }} />
+                            </Button>
+                        </div>
+                    </div>
+                )}
                 <div style={{
                     display: 'flex',
                     flexDirection: 'column',

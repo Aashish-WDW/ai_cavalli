@@ -2,47 +2,53 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Menu, ShoppingCart, Clock } from 'lucide-react'
-import clsx from 'clsx'
-import styles from './BottomNav.module.css'
-import { useCart } from '@/lib/context/CartContext'
-
-const tabs = [
-    { name: 'Home', href: '/guest/home', icon: Home, ariaLabel: 'Go to home page' },
-    { name: 'Menu', href: '/guest/menu', icon: Menu, ariaLabel: 'View menu' },
-    { name: 'Cart', href: '/guest/cart', icon: ShoppingCart, ariaLabel: 'View shopping cart' },
-    { name: 'Status', href: '/guest/status', icon: Clock, ariaLabel: 'View order status' },
-]
+import { Home, ShoppingCart, UtensilsCrossed, User } from 'lucide-react'
 
 export function GuestBottomNav() {
     const pathname = usePathname()
-    const { items } = useCart()
-    const cartCount = items.length
+
+    const navItems = [
+        { href: '/guest/home', icon: Home, label: 'Home' },
+        { href: '/guest/menu', icon: UtensilsCrossed, label: 'Menu' },
+        { href: '/guest/cart', icon: ShoppingCart, label: 'Cart' },
+        { href: '/profile', icon: User, label: 'Profile' }, // Changed from /guest/status to /profile
+    ]
 
     return (
-        <nav className={styles.nav} role="navigation" aria-label="Guest navigation">
-            {tabs.map((tab) => {
-                const Icon = tab.icon
-                const isActive = pathname.startsWith(tab.href)
+        <nav style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: 'var(--surface)',
+            borderTop: '1px solid var(--border)',
+            padding: '0.75rem 0',
+            display: 'flex',
+            justifyContent: 'space-around',
+            zIndex: 1000,
+            boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
+        }}>
+            {navItems.map(({ href, icon: Icon, label }) => {
+                const isActive = pathname === href
                 return (
                     <Link
-                        key={tab.name}
-                        href={tab.href}
-                        className={clsx(styles.link, isActive && styles.active)}
-                        aria-label={tab.ariaLabel}
-                        aria-current={isActive ? 'page' : undefined}
+                        key={href}
+                        href={href}
+                        style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                            color: isActive ? 'var(--primary)' : 'var(--text-muted)',
+                            textDecoration: 'none',
+                            fontSize: '0.75rem',
+                            fontWeight: isActive ? 600 : 400,
+                            transition: 'all 0.2s ease',
+                            padding: '0.25rem 1rem'
+                        }}
                     >
-                        <div className={styles.iconWrapper}>
-                            <Icon
-                                size={24}
-                                strokeWidth={isActive ? 2.5 : 2}
-                                aria-hidden="true"
-                            />
-                            {tab.name === 'Cart' && cartCount > 0 && (
-                                <span className={styles.badge}>{cartCount}</span>
-                            )}
-                        </div>
-                        <span className={styles.label}>{tab.name}</span>
+                        <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                        <span>{label}</span>
                     </Link>
                 )
             })}

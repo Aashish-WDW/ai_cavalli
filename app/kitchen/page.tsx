@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/database/supabase'
 import { useAuth } from '@/lib/auth/context'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,7 +27,9 @@ import {
     Printer,
     Pencil,
     Percent,
-    XIcon
+    XIcon,
+    Receipt,
+    BellRing
 } from 'lucide-react'
 import { Loading } from '@/components/ui/Loading'
 
@@ -53,6 +56,7 @@ interface Order {
     created_at: string
     items?: OrderItem[]
     user?: { role: string, name: string, phone: string } | null
+    billed?: boolean
 }
 
 type FilterType = 'all' | 'rider' | 'staff' | 'guest'
@@ -67,9 +71,74 @@ export default function KitchenPage() {
     const [audioError, setAudioError] = useState(false)
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
     const [menuItems, setMenuItems] = useState<any[]>([])
+    const [generatingBill, setGeneratingBill] = useState<string | null>(null)
+    const [printingBill, setPrintingBill] = useState<string | null>(null)
+    const [billData, setBillData] = useState<any>(null)
+    const [billRequests, setBillRequests] = useState<any[]>([])
 
-    const { signOut } = useAuth()
+    const { user, signOut, isLoading: authLoading } = useAuth()
+    const router = useRouter()
 
+    const fetchOrders = async () => {
+        const { data, error } = await supabase
+            .from('orders')
+            .select(`
+                *,
+                user:users(role, name, phone),
+                items:order_items(
+                    *,
+                    menu_item:menu_items(name)
+                )
+            `)
+            .in('status', ['pending', 'preparing', 'ready'])
+            .order('created_at', { ascending: true })
+
+        if (data) setOrders(data)
+        setLoading(false)
+    }
+
+    const fetchCompletedOrders = async () => {
+        const { data } = await supabase
+            .from('orders')
+            .select(`
+                *,
+                user:users(role, name, phone),
+                items:order_items(
+                    *,
+                    menu_item:menu_items(name)
+                )
+            `)
+            .eq('status', 'completed')
+            .order('created_at', { ascending: false })
+            .limit(20)
+
+        if (data) setCompletedOrders(data)
+    }
+
+    const fetchSingleOrder = async (orderId: string) => {
+        const { data } = await supabase
+            .from('orders')
+            .select(`
+                    *,
+                    user:users(role, name, phone),
+                    items:order_items(
+                        *,
+                        menu_item:menu_items(name)
+                    )
+                `)
+            .eq('id', orderId)
+            .single()
+        return data
+    }
+
+    // Auth Guard
+    useEffect(() => {
+        if (!authLoading && (!user || (user.role !== 'kitchen_manager' && user.role !== 'admin'))) {
+            router.push('/home')
+        }
+    }, [user, authLoading, router])
+
+    // Subscription & Init
     useEffect(() => {
         fetchOrders()
 
@@ -82,22 +151,6 @@ export default function KitchenPage() {
                 console.error('Audio play failed:', e)
                 setAudioError(true)
             })
-        }
-
-        const fetchSingleOrder = async (orderId: string) => {
-            const { data } = await supabase
-                .from('orders')
-                .select(`
-                    *,
-                    user:users(role, name, phone),
-                    items:order_items(
-                        *,
-                        menu_item:menu_items(name)
-                    )
-                `)
-                .eq('id', orderId)
-                .single()
-            return data
         }
 
         const channel = supabase
@@ -150,7 +203,7 @@ export default function KitchenPage() {
         }
     }, [])
 
-    // Fetch menu items for add item dropdown
+    // Fetch menu items
     useEffect(() => {
         async function fetchMenuItems() {
             const { data } = await supabase
@@ -163,46 +216,85 @@ export default function KitchenPage() {
         fetchMenuItems()
     }, [])
 
-    async function fetchOrders() {
-        const { data, error } = await supabase
-            .from('orders')
-            .select(`
-                *,
-                user:users(role, name, phone),
-                items:order_items(
-                    *,
-                    menu_item:menu_items(name)
-                )
-            `)
-            .in('status', ['pending', 'preparing', 'ready'])
-            .order('created_at', { ascending: true })
+    // Fetch and subscribe to bill requests
+    useEffect(() => {
+        async function fetchBillRequests() {
+            const { data } = await supabase
+                .from('guest_sessions')
+                .select('*')
+                .eq('status', 'active')
+                .eq('bill_requested', true)
+                .order('bill_requested_at', { ascending: true })
+            setBillRequests(data || [])
+        }
 
-        if (data) setOrders(data)
-        setLoading(false)
+        fetchBillRequests()
+
+        // Subscribe to guest_sessions changes for bill requests
+        const billChannel = supabase
+            .channel('bill-requests')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'guest_sessions' },
+                async (payload) => {
+                    if (payload.eventType === 'UPDATE' && payload.new.bill_requested) {
+                        // New bill request
+                        setBillRequests(prev => {
+                            const exists = prev.find(r => r.id === payload.new.id)
+                            if (!exists) {
+                                // Play notification sound
+                                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3')
+                                audio.play().catch(console.error)
+                                return [...prev, payload.new]
+                            }
+                            return prev.map(r => r.id === payload.new.id ? payload.new : r)
+                        })
+                    } else if (payload.eventType === 'UPDATE' && payload.new.status === 'ended') {
+                        // Session ended, remove from bill requests
+                        setBillRequests(prev => prev.filter(r => r.id !== payload.new.id))
+                    }
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(billChannel)
+        }
+    }, [])
+
+    // Handle generate session bill
+    const handleGenerateSessionBill = async (sessionId: string) => {
+        setGeneratingBill(sessionId)
+        try {
+            const response = await fetch('/api/bills/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, paymentMethod: 'cash' })
+            })
+            const data = await response.json()
+            if (data.success) {
+                setBillData(data.bill)
+                setBillRequests(prev => prev.filter(r => r.id !== sessionId))
+                alert(`Bill ${data.bill.billNumber} generated! Total: ₹${data.bill.finalTotal}`)
+            } else {
+                alert(`Failed: ${data.error}`)
+            }
+        } catch (err) {
+            alert('Failed to generate bill')
+        } finally {
+            setGeneratingBill(null)
+        }
     }
 
-    async function fetchCompletedOrders() {
-        const { data } = await supabase
-            .from('orders')
-            .select(`
-                *,
-                user:users(role, name, phone),
-                items:order_items(
-                    *,
-                    menu_item:menu_items(name)
-                )
-            `)
-            .eq('status', 'completed')
-            .order('created_at', { ascending: false })
-            .limit(20)
-
-        if (data) setCompletedOrders(data)
+    // Dismiss bill request (mark as handled without generating bill)
+    const dismissBillRequest = (sessionId: string) => {
+        setBillRequests(prev => prev.filter(r => r.id !== sessionId))
     }
 
     const filteredOrders = useMemo(() => {
         if (filter === 'all') return orders
         return orders.filter(order => {
-            if (filter === 'guest') return order.guest_info !== null
+            if (filter === 'guest') return order.guest_info !== null || order.user?.role === 'guest'
             if (filter === 'rider') return order.user_id !== null && order.user?.role === 'student'
             if (filter === 'staff') return order.user_id !== null && order.user?.role === 'staff'
             return true
@@ -235,88 +327,85 @@ export default function KitchenPage() {
         }
     }
 
-    // Order editing functions
     async function updateItemQuantity(orderItemId: string, orderId: string, newQuantity: number) {
         if (newQuantity < 1) return
-
-        console.log('Updating item quantity:', { orderItemId, orderId, newQuantity })
-
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('order_items')
             .update({ quantity: newQuantity })
             .eq('id', orderItemId)
-            .select()
-
-        if (error) {
-            console.error('Update quantity error:', error)
-            alert(`Failed to update quantity: ${error.message}`)
-        } else {
-            console.log('Update successful:', data)
-            // Refresh orders to get updated total
-            await fetchOrders()
-        }
+        if (error) alert(`Failed to update quantity: ${error.message}`)
+        else await fetchOrders()
     }
 
     async function deleteOrderItem(orderItemId: string, orderId: string) {
         if (!confirm('Delete this item from the order?')) return
-
-        console.log('Deleting item:', { orderItemId, orderId })
-
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('order_items')
             .delete()
             .eq('id', orderItemId)
-            .select()
+        if (error) alert(`Failed to delete item: ${error.message}`)
+        else await fetchOrders()
+    }
 
-        if (error) {
-            console.error('Delete item error:', error)
-            alert(`Failed to delete item: ${error.message}`)
-        } else {
-            console.log('Delete successful:', data)
-            // Refresh orders
-            await fetchOrders()
-        }
+    async function handleGenerateBill(orderId: string, paymentMethod: string = 'cash') {
+        const order = [...orders, ...completedOrders].find(o => o.id === orderId)
+        if (!order || !order.items?.length || order.billed) return
+        setGeneratingBill(orderId)
+        try {
+            const response = await fetch('/api/bills/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId, paymentMethod })
+            })
+            const data = await response.json()
+            if (data.success) {
+                setBillData(data.bill)
+                await fetchOrders()
+                await fetchCompletedOrders()
+                await handlePrintBill(data.bill.id)
+            }
+        } catch (error) { console.error(error) } finally { setGeneratingBill(null) }
+    }
+
+    async function handlePrintBill(billId: string) {
+        setPrintingBill(billId)
+        try {
+            const response = await fetch('/api/bills/print', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ billId })
+            })
+            const data = await response.json()
+            if (data.success) {
+                const printWindow = window.open('', '_blank', 'width=400,height=600')
+                if (printWindow) {
+                    printWindow.document.write(`<html><body>${data.printData.text}</body></html>`)
+                    printWindow.document.close()
+                }
+            }
+        } catch (error) { console.error(error) } finally { setPrintingBill(null) }
     }
 
     async function addItemToOrder(orderId: string, menuItemId: string) {
         const menuItem = menuItems.find(m => m.id === menuItemId)
         if (!menuItem) return
-
-        console.log('Adding item to order:', { orderId, menuItemId, menuItem })
-
-        const { data, error } = await supabase
-            .from('order_items')
-            .insert({
-                order_id: orderId,
-                menu_item_id: menuItemId,
-                quantity: 1,
-                price: menuItem.price
-            })
-            .select()
-
-        if (error) {
-            console.error('Add item error:', error)
-            alert(`Failed to add item: ${error.message}`)
-        } else {
-            console.log('Add successful:', data)
-            // Refresh orders
-            await fetchOrders()
-        }
+        const { error } = await supabase.from('order_items').insert({ order_id: orderId, menu_item_id: menuItemId, quantity: 1, price: menuItem.price })
+        if (error) alert(error.message)
+        else await fetchOrders()
     }
 
     const getOrderTypeBadge = (order: Order) => {
-        if (order.guest_info) return { label: 'GUEST', color: '#9333ea', icon: User }
+        if (order.guest_info || order.user?.role === 'guest') return { label: 'GUEST', color: '#9333ea', icon: User }
         if (order.user?.role === 'student') return { label: 'RIDER', color: '#2563eb', icon: LayoutDashboard }
         if (order.user?.role === 'staff') {
-            if (order.notes === 'REGULAR_STAFF_MEAL') {
-                return { label: 'REGULAR MEAL', color: '#3B82F6', icon: Shield }
-            }
+            if (order.notes === 'REGULAR_STAFF_MEAL') return { label: 'REGULAR MEAL', color: '#3B82F6', icon: Shield }
             return { label: 'STAFF', color: '#059669', icon: Shield }
         }
         return { label: 'UNKNOWN', color: '#6b7280', icon: Info }
     }
 
-    if (loading) return <Loading fullScreen message="Syncing with Kitchen..." />
+    if (authLoading || loading) return <Loading fullScreen message="Syncing with Kitchen..." />
+    if (!user || (user.role !== 'kitchen_manager' && user.role !== 'admin')) return null
 
     return (
         <div className="fade-in" style={{ padding: 'var(--space-4)', background: 'var(--background)', minHeight: '100vh' }}>
@@ -421,6 +510,76 @@ export default function KitchenPage() {
                 }}>
                     <Info size={16} />
                     <strong>Alert:</strong> Audio notifications are muted. Click the speaker icon to enable.
+                </div>
+            )}
+
+            {/* Bill Requests Notification Panel */}
+            {billRequests.length > 0 && (
+                <div style={{
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    padding: 'var(--space-4)',
+                    borderRadius: '16px',
+                    marginBottom: 'var(--space-4)',
+                    boxShadow: '0 8px 32px rgba(16, 185, 129, 0.3)',
+                    animation: 'pulse 2s infinite'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                        <BellRing size={24} color="white" style={{ animation: 'shake 0.5s ease-in-out infinite' }} />
+                        <h3 style={{ margin: 0, color: 'white', fontSize: '1.25rem', fontWeight: 800 }}>
+                            BILL REQUESTS ({billRequests.length})
+                        </h3>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        {billRequests.map((req) => (
+                            <div key={req.id} style={{
+                                background: 'white',
+                                padding: '16px',
+                                borderRadius: '12px',
+                                minWidth: '250px',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                    <div>
+                                        <p style={{ margin: '0 0 4px 0', fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)' }}>
+                                            {req.table_name}
+                                        </p>
+                                        <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                            {req.guest_name} • {req.num_guests} guests
+                                        </p>
+                                    </div>
+                                    <Receipt size={20} color="#10B981" />
+                                </div>
+                                <p style={{ margin: '8px 0', fontSize: '0.8rem', color: '#666' }}>
+                                    Requested {req.bill_requested_at ? new Date(req.bill_requested_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'just now'}
+                                </p>
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                                    <Button
+                                        onClick={() => handleGenerateSessionBill(req.id)}
+                                        disabled={generatingBill === req.id}
+                                        size="sm"
+                                        style={{
+                                            flex: 1,
+                                            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                            border: 'none',
+                                            color: 'white',
+                                            fontWeight: 700
+                                        }}
+                                    >
+                                        <Printer size={14} style={{ marginRight: '6px' }} />
+                                        {generatingBill === req.id ? 'Generating...' : 'Generate Bill'}
+                                    </Button>
+                                    <Button
+                                        onClick={() => dismissBillRequest(req.id)}
+                                        variant="outline"
+                                        size="sm"
+                                        style={{ borderColor: '#ccc' }}
+                                    >
+                                        <XIcon size={14} />
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -567,9 +726,7 @@ export default function KitchenPage() {
                                         <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>ORDER ITEMS</p>
                                         <div style={{ background: 'var(--background)', borderRadius: 'var(--radius)', padding: 'var(--space-3)' }}>
                                             {editingOrderId === order.id ? (
-                                                // Edit mode
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    {/* Show regular meal badge if this is a regular meal */}
                                                     {order.notes === 'REGULAR_STAFF_MEAL' && (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '12px', border: '1px dashed rgba(59, 130, 246, 0.3)', marginBottom: '4px' }}>
                                                             <Utensils size={20} color="#3B82F6" />
@@ -583,46 +740,13 @@ export default function KitchenPage() {
                                                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px', background: 'white', borderRadius: '8px', border: '1px solid var(--border)' }}>
                                                             <span style={{ flex: 1, fontWeight: 600 }}>{item.menu_item?.name}</span>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.preventDefault()
-                                                                        e.stopPropagation()
-                                                                        updateItemQuantity(item.id, order.id, item.quantity - 1)
-                                                                    }}
-                                                                    type="button"
-                                                                    style={{ width: '28px', height: '28px', borderRadius: '4px', border: '1px solid var(--border)', background: 'white', cursor: 'pointer', fontWeight: 700 }}
-                                                                    disabled={item.quantity <= 1}
-                                                                >
-                                                                    -
-                                                                </button>
+                                                                <button onClick={() => updateItemQuantity(item.id, order.id, item.quantity - 1)} disabled={item.quantity <= 1} style={{ width: '28px', height: '28px', borderRadius: '4px', border: '1px solid var(--border)', background: 'white', cursor: 'pointer', fontWeight: 700 }}>-</button>
                                                                 <span style={{ minWidth: '30px', textAlign: 'center', fontWeight: 700 }}>{item.quantity}</span>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.preventDefault()
-                                                                        e.stopPropagation()
-                                                                        updateItemQuantity(item.id, order.id, item.quantity + 1)
-                                                                    }}
-                                                                    type="button"
-                                                                    style={{ width: '28px', height: '28px', borderRadius: '4px', border: '1px solid var(--border)', background: 'white', cursor: 'pointer', fontWeight: 700 }}
-                                                                >
-                                                                    +
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.preventDefault()
-                                                                        e.stopPropagation()
-                                                                        deleteOrderItem(item.id, order.id)
-                                                                    }}
-                                                                    type="button"
-                                                                    style={{ width: '28px', height: '28px', borderRadius: '4px', border: '1px solid #DC2626', background: 'white', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                    title="Delete item"
-                                                                >
-                                                                    🗑️
-                                                                </button>
+                                                                <button onClick={() => updateItemQuantity(item.id, order.id, item.quantity + 1)} style={{ width: '28px', height: '28px', borderRadius: '4px', border: '1px solid var(--border)', background: 'white', cursor: 'pointer', fontWeight: 700 }}>+</button>
+                                                                <button onClick={() => deleteOrderItem(item.id, order.id)} style={{ width: '28px', height: '28px', borderRadius: '4px', border: '1px solid #DC2626', background: 'white', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🗑️</button>
                                                             </div>
                                                         </div>
                                                     ))}
-                                                    {/* Add item dropdown */}
                                                     <select
                                                         onChange={(e) => {
                                                             if (e.target.value) {
@@ -639,7 +763,6 @@ export default function KitchenPage() {
                                                     </select>
                                                 </div>
                                             ) : (
-                                                // View mode
                                                 <>
                                                     {order.notes === 'REGULAR_STAFF_MEAL' && (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '12px', border: '1px dashed rgba(59, 130, 246, 0.3)', marginBottom: '8px' }}>
@@ -662,15 +785,7 @@ export default function KitchenPage() {
                                     </div>
 
                                     {order.notes && order.notes !== 'REGULAR_STAFF_MEAL' && (
-                                        <div style={{
-                                            background: '#FEF2F2',
-                                            color: '#DC2626',
-                                            padding: 'var(--space-3)',
-                                            borderRadius: 'var(--radius-sm)',
-                                            marginBottom: 'var(--space-4)',
-                                            fontSize: '0.875rem',
-                                            borderLeft: '3px solid #EF4444'
-                                        }}>
+                                        <div style={{ background: '#FEF2F2', color: '#DC2626', padding: 'var(--space-3)', borderRadius: 'var(--radius-sm)', marginBottom: 'var(--space-4)', fontSize: '0.875rem', borderLeft: '3px solid #EF4444' }}>
                                             <div style={{ fontWeight: 800, fontSize: '0.7rem', marginBottom: '2px', textTransform: 'uppercase' }}>Attention: Special Note</div>
                                             {order.notes}
                                         </div>
@@ -683,34 +798,17 @@ export default function KitchenPage() {
                                         </div>
                                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                                             {order.location_type && (
-                                                <div style={{
-                                                    background: order.location_type === 'outdoor' ? '#FEF3C7' : '#DBEAFE',
-                                                    color: order.location_type === 'outdoor' ? '#92400E' : '#1E40AF',
-                                                    padding: '2px 8px',
-                                                    borderRadius: '12px',
-                                                    fontWeight: 800,
-                                                    fontSize: '0.7rem',
-                                                    textTransform: 'uppercase'
-                                                }}>
-                                                    {order.location_type}
-                                                </div>
+                                                <div style={{ background: order.location_type === 'outdoor' ? '#FEF3C7' : '#DBEAFE', color: order.location_type === 'outdoor' ? '#92400E' : '#1E40AF', padding: '2px 8px', borderRadius: '12px', fontWeight: 800, fontSize: '0.7rem', textTransform: 'uppercase' }}>{order.location_type}</div>
                                             )}
-                                            <div style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '12px', fontWeight: 800, fontSize: '0.75rem' }}>
-                                                {order.num_guests || 1} GUESTS
-                                            </div>
+                                            <div style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '12px', fontWeight: 800, fontSize: '0.75rem' }}>{order.num_guests || 1} GUESTS</div>
                                         </div>
                                     </div>
 
-
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px solid var(--border-light)', paddingTop: 'var(--space-3)' }}>
                                         {(() => {
-                                            // Calculate items total (before discount)
                                             const itemsTotal = order.items?.reduce((sum, item: any) => sum + (item.price * item.quantity), 0) || 0
-                                            // Calculate discount amount
                                             const discountAmount = order.discount_amount > 0 ? itemsTotal * (order.discount_amount / 100) : 0
-                                            // Final total after discount
                                             const finalTotal = itemsTotal - discountAmount
-
                                             return (
                                                 <>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -731,114 +829,19 @@ export default function KitchenPage() {
                                             )
                                         })()}
                                     </div>
-
                                 </div>
 
                                 {!showCompleted && (
-                                    <div style={{
-                                        padding: 'var(--space-4)',
-                                        background: '#F9FAFB',
-                                        borderTop: '1px solid var(--border)',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: 'var(--space-3)'
-                                    }}>
-                                        {/* Primary Action Button */}
+                                    <div style={{ padding: 'var(--space-4)', background: '#F9FAFB', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                                         <div style={{ width: '100%' }}>
-                                            {order.status === 'pending' && (
-                                                <Button onClick={() => updateStatus(order.id, 'preparing')} size="lg" style={{ width: '100%', height: '56px', fontWeight: 800 }}>
-                                                    START COOKING
-                                                </Button>
-                                            )}
-                                            {order.status === 'preparing' && (
-                                                <Button onClick={() => updateStatus(order.id, 'ready')} size="lg" style={{ width: '100%', height: '56px', fontWeight: 800, background: '#10B981', border: 'none', color: 'white' }}>
-                                                    MARK AS READY
-                                                </Button>
-                                            )}
-                                            {order.status === 'ready' && (
-                                                <Button onClick={() => updateStatus(order.id, 'completed')} size="lg" variant="outline" style={{ width: '100%', height: '56px', fontWeight: 800, color: 'var(--text)', border: '2px solid var(--border)' }}>
-                                                    HAND OVER
-                                                </Button>
-                                            )}
+                                            {order.status === 'pending' && <Button onClick={() => updateStatus(order.id, 'preparing')} size="lg" style={{ width: '100%', height: '56px', fontWeight: 800 }}>START COOKING</Button>}
+                                            {order.status === 'preparing' && <Button onClick={() => updateStatus(order.id, 'ready')} size="lg" style={{ width: '100%', height: '56px', fontWeight: 800, background: '#10B981', border: 'none', color: 'white' }}>MARK AS READY</Button>}
+                                            {order.status === 'ready' && <Button onClick={() => updateStatus(order.id, 'completed')} size="lg" variant="outline" style={{ width: '100%', height: '56px', fontWeight: 800, color: 'var(--text)', border: '2px solid var(--border)' }}>HAND OVER</Button>}
                                         </div>
-
-                                        {/* Secondary Actions - Clean Grid */}
-                                        <div style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '56px 1fr 1fr',
-                                            gap: 'var(--space-2)'
-                                        }}>
-                                            <button
-                                                onClick={() => {
-                                                    const percentage = prompt('Enter discount percentage (0-100):')
-                                                    if (percentage) updateDiscount(order.id, parseFloat(percentage))
-                                                }}
-                                                style={{
-                                                    height: '48px',
-                                                    borderRadius: 'var(--radius)',
-                                                    border: '1px solid var(--border)',
-                                                    background: 'white',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    color: 'var(--text-muted)'
-                                                }}
-                                                title="Apply Discount"
-                                            >
-                                                <Percent size={18} />
-                                            </button>
-
-                                            <button
-                                                onClick={() => setEditingOrderId(editingOrderId === order.id ? null : order.id)}
-                                                style={{
-                                                    height: '48px',
-                                                    borderRadius: 'var(--radius)',
-                                                    border: `1px solid ${editingOrderId === order.id ? '#DC2626' : 'var(--border)'}`,
-                                                    background: editingOrderId === order.id ? '#FEE2E2' : 'white',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '8px',
-                                                    color: editingOrderId === order.id ? '#DC2626' : 'var(--text)',
-                                                    fontWeight: 600,
-                                                    fontSize: '0.875rem'
-                                                }}
-                                            >
-                                                {editingOrderId === order.id ? (
-                                                    <>
-                                                        <XIcon size={16} />
-                                                        Cancel
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Pencil size={16} />
-                                                        Edit
-                                                    </>
-                                                )}
-                                            </button>
-
-                                            <button
-                                                onClick={() => alert('Bill generation connected to ESSAE printer')}
-                                                style={{
-                                                    height: '48px',
-                                                    borderRadius: 'var(--radius)',
-                                                    border: '1px solid var(--border)',
-                                                    background: 'white',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '8px',
-                                                    color: 'var(--text)',
-                                                    fontWeight: 600,
-                                                    fontSize: '0.875rem'
-                                                }}
-                                            >
-                                                <Printer size={16} />
-                                                Bill
-                                            </button>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 1fr', gap: 'var(--space-2)' }}>
+                                            <button onClick={() => { const p = prompt('Enter discount %:'); if (p) updateDiscount(order.id, parseFloat(p)) }} style={{ height: '48px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}><Percent size={18} /></button>
+                                            <button onClick={() => setEditingOrderId(editingOrderId === order.id ? null : order.id)} style={{ height: '48px', borderRadius: 'var(--radius)', border: `1px solid ${editingOrderId === order.id ? '#DC2626' : 'var(--border)'}`, background: editingOrderId === order.id ? '#FEE2E2' : 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: editingOrderId === order.id ? '#DC2626' : 'var(--text)', fontWeight: 600, fontSize: '0.875rem' }}>{editingOrderId === order.id ? <><XIcon size={16} /> Cancel</> : <><Pencil size={16} /> Edit</>}</button>
+                                            {order.billed ? <div style={{ height: '48px', borderRadius: 'var(--radius)', border: '1px solid #10B981', background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#059669', fontWeight: 600, fontSize: '0.875rem' }}><CheckCircle2 size={16} /> Billed</div> : <button onClick={() => handleGenerateBill(order.id, 'cash')} disabled={generatingBill === order.id || printingBill !== null} style={{ height: '48px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--text)', fontWeight: 600, fontSize: '0.875rem' }}><Printer size={16} /> {generatingBill === order.id ? '...' : 'Bill'}</button>}
                                         </div>
                                     </div>
                                 )}

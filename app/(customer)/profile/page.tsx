@@ -4,20 +4,26 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth/context'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/database/supabase'
-import { ChevronLeft, User, Package, LogOut, MessageSquare, ShieldCheck, Utensils } from 'lucide-react'
+import { ChevronLeft, User, Package, LogOut, MessageSquare, ShieldCheck, Utensils, Receipt, CreditCard } from 'lucide-react'
 import Link from 'next/link'
 import { Loading } from '@/components/ui/Loading'
 import { useCart } from '@/lib/context/CartContext'
 
 export default function ProfilePage() {
-    const { signOut, user, role } = useAuth()
+    const { signOut, user } = useAuth()
+    const role = user?.role
     const { clearCart } = useCart()
     const [userDetails, setUserDetails] = useState<any>(null)
     const [orders, setOrders] = useState<any[]>([])
     const [loadingOrders, setLoadingOrders] = useState(true)
+    const [activeSession, setActiveSession] = useState<any>(null)
+    const [endingSession, setEndingSession] = useState(false)
 
     useEffect(() => {
         if (!user) return
+
+        // Set initial user details from context
+        setUserDetails(user)
 
         async function fetchUserDetails() {
             const { data } = await supabase
@@ -45,8 +51,21 @@ export default function ProfilePage() {
             setLoadingOrders(false)
         }
 
+        async function fetchActiveSession() {
+            if (user?.role === 'guest') {
+                try {
+                    // Use phone for session lookup (or userId as fallback)
+                    const phone = userDetails?.phone || user?.phone
+                    const response = await fetch(`/api/sessions/active?phone=${phone}&userId=${user.id}`)
+                    const data = await response.json()
+                    if (data.success) setActiveSession(data.session)
+                } catch (e) { console.error(e) }
+            }
+        }
+
         fetchUserDetails()
         fetchOrders()
+        fetchActiveSession()
 
         const channel = supabase
             .channel(`user-profile-orders-${user.id}`)
@@ -68,6 +87,59 @@ export default function ProfilePage() {
             supabase.removeChannel(channel)
         }
     }, [user])
+
+    const handleGetBill = async () => {
+        // CASE 1: No active session AND no orders placed
+        if (!activeSession && orders.length === 0) {
+            const confirmed = confirm(
+                "Leaving Ai Cavalli?\n\n" +
+                "You haven't placed any orders yet. Would you like to end your visit and sign out?"
+            )
+            if (confirmed) {
+                clearCart()
+                signOut()
+            }
+            return
+        }
+
+        // CASE 2: No orders to bill
+        if (orders.length === 0) {
+            alert("You haven't placed any orders yet. Please place an order first.")
+            return
+        }
+
+        // CASE 3: Active session exists with orders
+        const confirmed = confirm(
+            "Request your bill?\n\n" +
+            "A waiter will bring the bill to your table. You can still add more orders if you change your mind."
+        )
+
+        if (!confirmed) return
+
+        setEndingSession(true)
+        try {
+            const response = await fetch('/api/bills/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: activeSession.id,
+                    userId: user?.id
+                })
+            })
+
+            const data = await response.json()
+            if (data.success) {
+                alert(data.message || "Bill request sent! A waiter will bring your bill shortly.")
+            } else {
+                alert(`Failed to request bill: ${data.error}`)
+            }
+        } catch (error) {
+            console.error(error)
+            alert("Failed to request bill. Please ask a waiter directly.")
+        } finally {
+            setEndingSession(false)
+        }
+    }
 
     return (
         <div className="container fade-in" style={{ paddingTop: 'var(--space-6)', paddingBottom: 'var(--space-12)' }}>
@@ -121,8 +193,14 @@ export default function ProfilePage() {
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
                             <div style={{ padding: 'var(--space-4)', background: 'var(--background)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600 }}>PHONE NUMBER</p>
-                                <p style={{ fontWeight: 700, margin: 0 }}>{userDetails?.phone || 'Not set'}</p>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600 }}>
+                                    {role === 'staff' || role === 'student' ? 'PHONE NUMBER' : 'EMAIL ADDRESS'}
+                                </p>
+                                <p style={{ fontWeight: 700, margin: 0 }}>
+                                    {role === 'staff' || role === 'student'
+                                        ? (userDetails?.phone || 'Not set')
+                                        : (userDetails?.email || 'Not set')}
+                                </p>
                             </div>
                             <div style={{ padding: 'var(--space-4)', background: 'var(--background)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
                                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600 }}>SECURITY PIN</p>
@@ -134,6 +212,103 @@ export default function ProfilePage() {
                         </div>
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+                            {role === 'guest' && (
+                                <div style={{
+                                    flex: '1 1 100%',
+                                    background: 'rgba(16, 185, 129, 0.05)',
+                                    padding: 'var(--space-4)',
+                                    borderRadius: 'var(--radius)',
+                                    border: '1px solid rgba(16, 185, 129, 0.2)',
+                                    marginBottom: 'var(--space-2)'
+                                }}>
+                                    {/* Order Summary */}
+                                    {activeSession && (
+                                        <div style={{
+                                            background: 'var(--background)',
+                                            padding: 'var(--space-4)',
+                                            borderRadius: 'var(--radius-sm)',
+                                            marginBottom: 'var(--space-4)',
+                                            border: '1px solid var(--border)'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>SESSION SUMMARY</span>
+                                                <span style={{ fontSize: '0.75rem', background: '#10B981', color: 'white', padding: '2px 8px', borderRadius: '4px' }}>ACTIVE</span>
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                                <div>
+                                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 4px 0' }}>TABLE</p>
+                                                    <p style={{ fontWeight: 700, margin: 0, fontSize: '1.1rem' }}>{activeSession.table_name}</p>
+                                                </div>
+                                                <div>
+                                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 4px 0' }}>ORDERS</p>
+                                                    <p style={{ fontWeight: 700, margin: 0, fontSize: '1.1rem' }}>{orders.length} placed</p>
+                                                </div>
+                                            </div>
+                                            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Current Total</span>
+                                                    <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)' }}>
+                                                        ₹{(activeSession.total_amount || orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0)).toFixed(2)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons */}
+                                    <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                                        <Button
+                                            onClick={() => window.location.href = '/home'}
+                                            variant="outline"
+                                            style={{
+                                                flex: 1,
+                                                height: '48px',
+                                                fontSize: '1rem',
+                                                fontWeight: 700,
+                                                borderColor: 'var(--primary)',
+                                                color: 'var(--primary)'
+                                            }}
+                                        >
+                                            <Utensils size={18} style={{ marginRight: '8px' }} />
+                                            ORDER MORE
+                                        </Button>
+                                    </div>
+
+                                    <Button
+                                        onClick={handleGetBill}
+                                        disabled={endingSession || orders.length === 0}
+                                        style={{
+                                            width: '100%',
+                                            height: '56px',
+                                            fontSize: '1.25rem',
+                                            fontWeight: 900,
+                                            background: orders.length === 0 ? '#ccc' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                            border: 'none',
+                                            boxShadow: orders.length === 0 ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)',
+                                            color: 'white',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '12px',
+                                            cursor: orders.length === 0 ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        <Receipt size={24} />
+                                        {endingSession ? 'Requesting...' : orders.length === 0 ? 'NO ORDERS YET' : 'GET THE BILL'}
+                                    </Button>
+
+                                    {orders.length > 0 && (
+                                        <p style={{
+                                            margin: '10px 0 0 0',
+                                            fontSize: '0.8rem',
+                                            color: '#059669',
+                                            textAlign: 'center'
+                                        }}>
+                                            A waiter will bring your bill to the table
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                             <Button
                                 onClick={() => window.open('https://wa.me/1234567890', '_blank')}
                                 variant="outline"
@@ -283,3 +458,5 @@ export default function ProfilePage() {
         </div>
     )
 }
+
+

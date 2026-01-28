@@ -9,15 +9,19 @@ import { ChevronLeft, Package, Clock, CheckCircle2, XCircle } from 'lucide-react
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Loading } from '@/components/ui/Loading'
-import { Utensils } from 'lucide-react'
+import { Utensils, Receipt } from 'lucide-react'
+import { useCart } from '@/lib/context/CartContext'
 
 export default function OrdersPage() {
-    const { user } = useAuth()
+    const { user, signOut } = useAuth()
+    const { clearCart } = useCart()
     const searchParams = useSearchParams()
     const orderIdParam = searchParams.get('orderId')
 
     const [orders, setOrders] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [activeSession, setActiveSession] = useState<any>(null)
+    const [endingSession, setEndingSession] = useState(false)
 
     useEffect(() => {
         // If neither user nor orderIdParam, we can't show anything
@@ -47,7 +51,25 @@ export default function OrdersPage() {
             setLoading(false)
         }
 
+        async function fetchActiveSession() {
+            if (user?.role === 'guest') {
+                try {
+                    const { data: { session } } = await supabase.auth.getSession()
+                    const token = session?.access_token
+
+                    const response = await fetch(`/api/sessions/active?email=${user.email}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    })
+                    const data = await response.json()
+                    if (data.success) setActiveSession(data.session)
+                } catch (e) { console.error(e) }
+            }
+        }
+
         fetchOrders()
+        fetchActiveSession()
 
         // Real-time listener
         const filter = user ? `user_id=eq.${user.id}` : (orderIdParam ? `id=eq.${orderIdParam}` : '')
@@ -74,6 +96,70 @@ export default function OrdersPage() {
         }
     }, [user, orderIdParam])
 
+    const handleGetBill = async () => {
+        // CASE 1: No active session AND no orders placed
+        if (!activeSession && orders.length === 0) {
+            const confirmed = confirm(
+                "Leaving Ai Cavalli?\n\n" +
+                "You haven't placed any orders yet. Would you like to end your visit and sign out?"
+            )
+            if (confirmed) {
+                clearCart()
+                signOut()
+            }
+            return
+        }
+
+        // CASE 2: No active session BUT orders exist (Unexpected state)
+        if (!activeSession && orders.length > 0) {
+            alert(
+                "Active session not found in system.\n\n" +
+                "However, we see you have placed active orders. Please contact our staff or try signing out and back in if this is an error."
+            )
+            return
+        }
+
+        // CASE 3: Active session exists
+        const confirmed = confirm(
+            "Finalize your meal and get the bill?\n\n" +
+            "Clicking this will result in ending your session and you will get the bill with a UPI code sent to your WhatsApp number."
+        )
+
+        if (!confirmed) return
+
+        setEndingSession(true)
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const token = session?.access_token
+
+            const response = await fetch('/api/sessions/end', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    sessionId: activeSession.id,
+                    paymentMethod: 'upi'
+                })
+            })
+
+            const data = await response.json()
+            if (data.success) {
+                alert(data.message || "Session ended! Check your WhatsApp for the bill.")
+                clearCart()
+                signOut()
+            } else {
+                alert(`Failed to end session: ${data.error}`)
+            }
+        } catch (error) {
+            console.error(error)
+            alert("Failed to process bill request.")
+        } finally {
+            setEndingSession(false)
+        }
+    }
+
     if (loading) {
         return <Loading fullScreen message="Fetching your order status..." />
     }
@@ -88,6 +174,65 @@ export default function OrdersPage() {
                     {orderIdParam && !user ? 'Order Status' : 'My Orders'}
                 </h1>
             </div>
+
+            {user?.role === 'guest' && (
+                <div style={{
+                    marginBottom: 'var(--space-6)',
+                    background: activeSession ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : 'rgba(255, 255, 255, 0.9)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: 'var(--space-5)',
+                    color: activeSession ? 'white' : 'var(--text)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+                    border: activeSession ? 'none' : '2px dashed #10B981',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--space-4)'
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>
+                                {activeSession ? 'Finalize Your Meal' : 'Ready for the Bill?'}
+                            </h3>
+                            {activeSession ? (
+                                <p style={{ margin: 0, opacity: 0.9, fontSize: '0.875rem' }}>
+                                    ₹{activeSession.total_amount?.toFixed(2) || '0.00'} • {activeSession.orderCount} Orders
+                                </p>
+                            ) : (
+                                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                                    End your session and get the bill on WhatsApp
+                                </p>
+                            )}
+                        </div>
+                        <Receipt size={32} color={activeSession ? 'white' : '#10B981'} />
+                    </div>
+                    <Button
+                        onClick={handleGetBill}
+                        disabled={endingSession}
+                        style={{
+                            background: activeSession ? 'white' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                            color: activeSession ? '#059669' : 'white',
+                            fontWeight: 900,
+                            height: '56px',
+                            border: 'none',
+                            fontSize: '1.125rem',
+                            boxShadow: activeSession ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)'
+                        }}
+                    >
+                        {endingSession ? 'Processing...' : (activeSession ? 'GET THE BILL & END SESSION' : 'GET THE BILL')}
+                    </Button>
+                    <p style={{
+                        margin: 0,
+                        fontSize: '0.75rem',
+                        textAlign: 'center',
+                        opacity: activeSession ? 0.9 : 0.7,
+                        fontStyle: 'italic'
+                    }}>
+                        {activeSession
+                            ? "Clicking will end your session and send the bill + UPI code to your WhatsApp."
+                            : "Note: You must have placed at least one order to generate a bill."}
+                    </p>
+                </div>
+            )}
 
             {orders.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
