@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/context'
 import Link from 'next/link'
@@ -12,6 +12,11 @@ export default function KitchenLayout({
 }) {
     const { user, isLoading } = useAuth()
     const router = useRouter()
+    const [isHydrated, setIsHydrated] = useState(false)
+
+    useEffect(() => {
+        setIsHydrated(true)
+    }, [])
 
     useEffect(() => {
         if (!isLoading) {
@@ -23,7 +28,7 @@ export default function KitchenLayout({
         }
     }, [user, isLoading, router])
 
-    if (isLoading) {
+    if (!isHydrated || isLoading) {
         return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading Kitchen Portal...</div>
     }
 
