@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+# Ai Cavalli – Restaurant Management App
 
-First, run the development server:
+## Overview
+Ai Cavalli is a modern restaurant management system built with Next.js, React, and TypeScript. It features custom authentication, role-based access control (RBAC), and a modular architecture for handling customers, kitchen staff, admins, and guests.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Features
+- Custom PIN-based authentication (no Supabase Auth dependency)
+- Roles: STUDENT, OUTSIDER, KITCHEN, ADMIN
+- Secure session management with cookies and session tokens
+- Modular route protection via middleware and layouts
+- Admin panel for user management
+- Kitchen and customer interfaces
+- PostgreSQL database (Supabase hosted)
+
+## Project Structure
+```
+app/           # Next.js App Router pages and layouts
+components/    # UI and layout components
+lib/           # Auth, context, database, and utility code
+public/        # Static assets
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Database Setup
+- Main schema: `lib/database/schema.sql`
+- Seed data: `lib/database/seed.sql`
+- Menu seed: `lib/database/seed_menu.sql`
+- Latest migration: `lib/database/auth_safe_migration.sql`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Apply SQL files using Supabase SQL Editor or `psql` CLI.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Development
+1. Clone the repo and install dependencies:
+	```sh
+	npm install
+	```
+2. Set up your `.env.local` with Supabase credentials.
+3. Run the dev server:
+	```sh
+	npm run dev
+	```
 
-## Learn More
+## Auth System
+- PIN login for all roles (6 digits)
+- Session tokens stored in DB and cookies
+- Role normalization for legacy DB values
+- Route protection via middleware
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
+- `npm run dev` – Start development server
+- `npm run build` – Build for production
+- `npm run lint` – Lint code
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes
+- Only the following SQL files are needed: `schema.sql`, `seed.sql`, `seed_menu.sql`, `auth_safe_migration.sql`
+- All other `.sql` files are legacy and can be ignored or deleted
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+MIT
