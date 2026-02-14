@@ -40,7 +40,7 @@ export default function GuestHome() {
                 const { data: { session: currentSession } } = await supabase.auth.getSession()
                 const token = currentSession?.access_token
 
-                const response = await fetch(`/api/sessions/active?email=${user?.email}`, {
+                const response = await fetch(`/api/sessions/active?phone=${user?.phone}`, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },

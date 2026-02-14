@@ -57,7 +57,7 @@ export default function OrdersPage() {
                     const { data: { session } } = await supabase.auth.getSession()
                     const token = session?.access_token
 
-                    const response = await fetch(`/api/sessions/active?email=${user.email}`, {
+                    const response = await fetch(`/api/sessions/active?phone=${user.phone}`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
