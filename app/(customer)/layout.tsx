@@ -16,17 +16,15 @@ export default function CustomerLayout({
     useEffect(() => {
         if (!isLoading) {
             if (!user) {
-                // No authenticated user - redirect to login
                 router.push('/login')
-            } else if (user.role === 'kitchen_manager' || user.role === 'admin') {
-                // Kitchen/admin users should use kitchen portal
+            } else if (user.role === 'KITCHEN' || user.role === 'ADMIN') {
                 router.push('/kitchen')
             }
-            // Students, staff, and guests can access customer portal
+            // STUDENT and OUTSIDER can both access customer portal
         }
     }, [user, isLoading, router])
 
-    if (!user && isLoading) {
+    if (isLoading) {
         return <div className="loading-screen" style={{
             height: '100vh',
             display: 'flex',
@@ -37,7 +35,10 @@ export default function CustomerLayout({
         }}>Loading...</div>
     }
 
-    if (!user) return null
+    // Render for STUDENT and OUTSIDER roles
+    if (!user || user.role === 'KITCHEN' || user.role === 'ADMIN') {
+        return null
+    }
 
     return (
         <div style={{ paddingBottom: '80px' }}>

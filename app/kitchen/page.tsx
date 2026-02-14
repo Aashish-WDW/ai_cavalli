@@ -29,9 +29,11 @@ import {
     Percent,
     XIcon,
     Receipt,
-    BellRing
+    BellRing,
+    Plus
 } from 'lucide-react'
 import { Loading } from '@/components/ui/Loading'
+import { MenuItemSelector } from '@/components/kitchen/MenuItemSelector'
 
 interface OrderItem {
     id: string
@@ -71,12 +73,15 @@ export default function KitchenPage() {
     const [audioError, setAudioError] = useState(false)
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
     const [menuItems, setMenuItems] = useState<any[]>([])
+    const [categories, setCategories] = useState<any[]>([])
     const [generatingBill, setGeneratingBill] = useState<string | null>(null)
     const [printingBill, setPrintingBill] = useState<string | null>(null)
     const [billData, setBillData] = useState<any>(null)
     const [billRequests, setBillRequests] = useState<any[]>([])
+    const [showMenuSelector, setShowMenuSelector] = useState(false)
+    const [selectedOrderForMenu, setSelectedOrderForMenu] = useState<string | null>(null)
 
-    const { user, signOut, isLoading: authLoading } = useAuth()
+    const { user, logout, isLoading: authLoading } = useAuth()
     const router = useRouter()
 
     const fetchOrders = async () => {
@@ -131,9 +136,9 @@ export default function KitchenPage() {
         return data
     }
 
-    // Auth Guard
+    // Auth Guard - Allow staff, kitchen_manager, and admin
     useEffect(() => {
-        if (!authLoading && (!user || (user.role !== 'kitchen_manager' && user.role !== 'admin'))) {
+        if (!authLoading && (!user || (user.role !== 'KITCHEN' && user.role !== 'ADMIN'))) {
             router.push('/home')
         }
     }, [user, authLoading, router])
@@ -203,17 +208,24 @@ export default function KitchenPage() {
         }
     }, [])
 
-    // Fetch menu items
+    // Fetch menu items and categories
     useEffect(() => {
-        async function fetchMenuItems() {
-            const { data } = await supabase
-                .from('menu_items')
-                .select('*')
-                .eq('available', true)
-                .order('name')
-            setMenuItems(data || [])
+        async function fetchMenuData() {
+            const [itemsRes, categoriesRes] = await Promise.all([
+                supabase
+                    .from('menu_items')
+                    .select('*')
+                    .eq('available', true)
+                    .order('name'),
+                supabase
+                    .from('categories')
+                    .select('*')
+                    .order('sort_order')
+            ])
+            setMenuItems(itemsRes.data || [])
+            setCategories(categoriesRes.data || [])
         }
-        fetchMenuItems()
+        fetchMenuData()
     }, [])
 
     // Fetch and subscribe to bill requests
@@ -294,9 +306,9 @@ export default function KitchenPage() {
     const filteredOrders = useMemo(() => {
         if (filter === 'all') return orders
         return orders.filter(order => {
-            if (filter === 'guest') return order.guest_info !== null || order.user?.role === 'guest'
-            if (filter === 'rider') return order.user_id !== null && order.user?.role === 'student'
-            if (filter === 'staff') return order.user_id !== null && order.user?.role === 'staff'
+            if (filter === 'guest') return order.guest_info !== null || order.user?.role === 'OUTSIDER'
+            if (filter === 'rider') return order.user_id !== null && order.user?.role === 'STUDENT'
+            if (filter === 'staff') return order.user_id !== null && order.user?.role === 'STUDENT'
             return true
         })
     }, [orders, filter])
@@ -395,9 +407,9 @@ export default function KitchenPage() {
     }
 
     const getOrderTypeBadge = (order: Order) => {
-        if (order.guest_info || order.user?.role === 'guest') return { label: 'GUEST', color: '#9333ea', icon: User }
-        if (order.user?.role === 'student') return { label: 'RIDER', color: '#2563eb', icon: LayoutDashboard }
-        if (order.user?.role === 'staff') {
+        if (order.guest_info || order.user?.role === 'OUTSIDER') return { label: 'GUEST', color: '#9333ea', icon: User }
+        if (order.user?.role === 'STUDENT') return { label: 'RIDER', color: '#2563eb', icon: LayoutDashboard }
+        if (order.user?.role === 'KITCHEN') {
             if (order.notes === 'REGULAR_STAFF_MEAL') return { label: 'REGULAR MEAL', color: '#3B82F6', icon: Shield }
             return { label: 'STAFF', color: '#059669', icon: Shield }
         }
@@ -405,7 +417,7 @@ export default function KitchenPage() {
     }
 
     if (authLoading || loading) return <Loading fullScreen message="Syncing with Kitchen..." />
-    if (!user || (user.role !== 'kitchen_manager' && user.role !== 'admin')) return null
+    if (!user || (user.role !== 'KITCHEN' && user.role !== 'ADMIN')) return null
 
     return (
         <div className="fade-in" style={{ padding: 'var(--space-4)', background: 'var(--background)', minHeight: '100vh' }}>
@@ -477,7 +489,7 @@ export default function KitchenPage() {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => signOut()}
+                        onClick={() => logout()}
                         style={{
                             color: '#64748b',
                             fontWeight: '700',
@@ -746,20 +758,36 @@ export default function KitchenPage() {
                                                             </div>
                                                         </div>
                                                     ))}
-                                                    <select
-                                                        onChange={(e) => {
-                                                            if (e.target.value) {
-                                                                addItemToOrder(order.id, e.target.value)
-                                                                e.target.value = ''
-                                                            }
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedOrderForMenu(order.id)
+                                                            setShowMenuSelector(true)
                                                         }}
-                                                        style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, cursor: 'pointer' }}
+                                                        style={{ 
+                                                            padding: '8px 12px', 
+                                                            borderRadius: '8px', 
+                                                            border: '1px solid var(--border)', 
+                                                            background: 'white', 
+                                                            fontWeight: 600, 
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            color: 'var(--primary)',
+                                                            transition: 'all 0.2s ease'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.background = '#f5f5f5'
+                                                            e.currentTarget.style.borderColor = 'var(--primary)'
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.background = 'white'
+                                                            e.currentTarget.style.borderColor = 'var(--border)'
+                                                        }}
                                                     >
-                                                        <option value="">+ Add Item</option>
-                                                        {menuItems.map(item => (
-                                                            <option key={item.id} value={item.id}>{item.name} - ₹{item.price}</option>
-                                                        ))}
-                                                    </select>
+                                                        <Plus size={18} />
+                                                        Add Item
+                                                    </button>
                                                 </div>
                                             ) : (
                                                 <>
@@ -849,6 +877,20 @@ export default function KitchenPage() {
                     })
                 )}
             </div>
+
+            {showMenuSelector && selectedOrderForMenu && (
+                <MenuItemSelector
+                    items={menuItems}
+                    categories={categories}
+                    onSelect={(item) => {
+                        addItemToOrder(selectedOrderForMenu, item.id)
+                    }}
+                    onClose={() => {
+                        setShowMenuSelector(false)
+                        setSelectedOrderForMenu(null)
+                    }}
+                />
+            )}
 
             <style jsx global>{`
                 @keyframes pulse {
