@@ -99,7 +99,7 @@ export default function LoginPage() {
             })
 
             if (result.success) {
-                window.location.href = '/guest/home'
+                window.location.href = '/home'
             } else {
                 setError(result.error || 'Login failed')
             }

@@ -31,7 +31,7 @@ export function ProtectedRoute({ children, requiredRoles, fallbackPath = '/login
                 // Redirect to home based on role
                 switch (user.role) {
                     case 'OUTSIDER':
-                        router.push('/guest/home')
+                        router.push('/home')
                         break
                     case 'KITCHEN':
                     case 'ADMIN':
@@ -39,7 +39,7 @@ export function ProtectedRoute({ children, requiredRoles, fallbackPath = '/login
                         break
                     case 'STUDENT':
                     default:
-                        router.push('/student/home')
+                        router.push('/home')
                         break
                 }
             }

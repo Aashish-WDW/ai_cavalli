@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
     const resolveHome = (role?: UserRole) => {
         if (!role) return '/login'
         switch (role) {
-            case 'OUTSIDER': return '/guest/home'
+            case 'OUTSIDER': return '/home'
             case 'KITCHEN': return '/kitchen'
             case 'ADMIN': return '/kitchen'
             case 'STUDENT':

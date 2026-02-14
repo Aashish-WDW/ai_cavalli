@@ -113,9 +113,9 @@ export async function updateSession(request: NextRequest) {
     // Customer routes (/home, /menu, /cart, /orders, /profile)
     const customerRoutes = ['/home', '/menu', '/cart', '/orders', '/profile']
     if (customerRoutes.some(route => pathname.startsWith(route))) {
-        // Guests should use /guest routes
+        // Guests can access /home with role-based rendering
         if (userRole === 'guest') {
-            return NextResponse.redirect(new URL('/guest/home', request.url))
+            return NextResponse.redirect(new URL('/home', request.url))
         }
         // Kitchen/admin users should use their portals
         if (userRole === 'kitchen_manager' || userRole === 'admin') {

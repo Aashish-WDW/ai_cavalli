@@ -124,19 +124,13 @@ export const routeAccess: Record<string, UserRole[]> = {
     '/login': [],
     '/auth/callback': [],
 
-    // Student routes (via (customer) route group)
-    '/home': ['STUDENT'],
-    '/menu': ['STUDENT'],
-    '/cart': ['STUDENT'],
-    '/orders': ['STUDENT'],
-    '/profile': ['STUDENT'],
-
-    // Guest/Outsider routes
-    '/guest': ['OUTSIDER'],
-    '/guest/home': ['OUTSIDER'],
-    '/guest/menu': ['OUTSIDER'],
-    '/guest/cart': ['OUTSIDER'],
-    '/guest/status': ['OUTSIDER'],
+    // Student and Guest/Outsider routes
+    '/home': ['STUDENT', 'OUTSIDER'],
+    '/menu': ['STUDENT', 'OUTSIDER'],
+    '/cart': ['STUDENT', 'OUTSIDER'],
+    '/orders': ['STUDENT', 'OUTSIDER'],
+    '/profile': ['STUDENT', 'OUTSIDER'],
+    '/status': ['OUTSIDER', 'STUDENT'],
 
     // Kitchen routes
     '/kitchen': ['KITCHEN', 'ADMIN'],
